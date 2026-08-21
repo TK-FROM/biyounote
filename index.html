@@ -363,7 +363,7 @@
     <div class="toolbar">
       <input class="search-input" id="lookSearch" type="text" placeholder="メモで検索">
     </div>
-    <div class="filter-label">項目</div>
+    <div class="filter-label">分類</div>
     <div class="chip-filter" id="lookCatFilter"></div>
     <div class="filter-label">カラー</div>
     <div class="chip-filter" id="lookColorFilter"></div>
@@ -461,16 +461,29 @@
       <div class="field"><label>ブランド</label><input type="text" id="fItemBrand" placeholder="ブランド"></div>
     </div>
     <div class="field-row">
-      <div class="field"><label>購入日</label><input type="date" id="fItemPurchaseDate"></div>
+      <div class="field">
+        <label>購入日</label>
+        <input type="date" id="fItemPurchaseDate">
+        <label class="hint" style="display:flex;align-items:center;gap:5px;margin-top:5px;cursor:pointer;"><input type="checkbox" id="fItemPurchaseDateUnknown" style="width:auto;">不明</label>
+      </div>
       <div class="field"><label>価格</label><input type="number" id="fItemPrice" placeholder="円"></div>
     </div>
     <div class="field">
       <label>購入場所</label>
-      <input type="text" id="fItemPlace" placeholder="例）ドラッグストア〇〇店、公式通販">
+      <input type="text" id="fItemPlace" list="itemPlaceList" placeholder="例）ドラッグストア〇〇店、公式通販">
+      <datalist id="itemPlaceList"></datalist>
     </div>
     <div class="field-row">
-      <div class="field"><label>開封日</label><input type="date" id="fItemOpenDate"></div>
-      <div class="field"><label>使い切り日</label><input type="date" id="fItemUsedUpDate"></div>
+      <div class="field">
+        <label>開封日</label>
+        <input type="date" id="fItemOpenDate">
+        <label class="hint" style="display:flex;align-items:center;gap:5px;margin-top:5px;cursor:pointer;"><input type="checkbox" id="fItemOpenDateUnknown" style="width:auto;">不明</label>
+      </div>
+      <div class="field">
+        <label>使い切り日</label>
+        <input type="date" id="fItemUsedUpDate">
+        <label class="hint" style="display:flex;align-items:center;gap:5px;margin-top:5px;cursor:pointer;"><input type="checkbox" id="fItemUsedUpDateUnknown" style="width:auto;">不明</label>
+      </div>
     </div>
     <div class="field">
       <label>使用感・レビュー</label>
@@ -500,7 +513,7 @@
       </label>
     </div>
     <div class="field">
-      <label>項目</label>
+      <label>分類</label>
       <div class="genre-pick" id="fLookCat"></div>
     </div>
     <div class="field">
@@ -577,7 +590,7 @@
     "ボディケア": ["ボディソープ","スクラブ","ボディクリーム","ハンドクリーム"],
     "メイク": ["ベース","アイメイク","チーク","リップ"]
   };
-  var LOOK_CATS = ["髪型","メイク","その他","コスメ"];
+  var LOOK_CATS = ["髪型","メイク","コスメ","その他"];
   var COLOR_PRESETS = [
     ["ベージュ","#C9AE8C"],["ブラウン","#7B5236"],["レッド","#B23A3A"],["ピンク","#E497B0"],
     ["オレンジ","#D98A3D"],["イエロー","#E3C24A"],["グリーン","#6E9A6B"],["ブルー","#4C7EA8"],
@@ -640,8 +653,10 @@
     });
   }
 
+  var DATE_UNKNOWN = "不明";
   function fmtDate(iso){
     if(!iso) return "";
+    if(iso === DATE_UNKNOWN) return DATE_UNKNOWN;
     var p = iso.split("-");
     return p[0]+"."+p[1]+"."+p[2];
   }
@@ -840,7 +855,7 @@
 
   function itemStatus(it){
     if(it.usedUpDate) return { label:"使い切り", cls:"status-used" };
-    if(it.openDate) return { label:"使用中・"+daysSince(it.openDate)+"日目", cls:"status-inuse" };
+    if(it.openDate) return { label: it.openDate === DATE_UNKNOWN ? "使用中" : "使用中・"+daysSince(it.openDate)+"日目", cls:"status-inuse" };
     return { label:"未開封", cls:"status-unopened" };
   }
 
@@ -949,6 +964,19 @@
     buildGenrePicker(document.getElementById("fItemSubcat"), selected && opts.indexOf(selected)!==-1 ? selected : opts[0], opts);
   }
 
+  function setupUnknownDateField(dateInputId, checkboxId, value){
+    var dateInput = document.getElementById(dateInputId), checkbox = document.getElementById(checkboxId);
+    var isUnknown = value === DATE_UNKNOWN;
+    checkbox.checked = isUnknown;
+    dateInput.disabled = isUnknown;
+    dateInput.value = isUnknown ? "" : (value || "");
+    checkbox.onchange = function(){
+      dateInput.disabled = checkbox.checked;
+      if(checkbox.checked) dateInput.value = "";
+    };
+    return { get: function(){ return checkbox.checked ? DATE_UNKNOWN : dateInput.value; } };
+  }
+
   function setupPhotoDrop(dropId, hintId, inputId, maxDim, quality, initialPhoto){
     var drop = document.getElementById(dropId), hint = document.getElementById(hintId), input = document.getElementById(inputId);
     drop.querySelectorAll("img").forEach(function(i){ i.remove(); });
@@ -974,6 +1002,7 @@
   }
 
   var itemPhotoCtl = null;
+  var itemPurchaseDateCtl = null, itemOpenDateCtl = null, itemUsedUpDateCtl = null;
   function openItemModal(it){
     itemState.editingId = it ? it.id : null;
     document.getElementById("modalItemTitle").textContent = it ? "アイテムを編集" : "アイテムを追加";
@@ -982,11 +1011,12 @@
     renderItemSubcatPicker(startGenre, it ? it.subcategory : null);
     document.getElementById("fItemName").value = it ? it.name : "";
     document.getElementById("fItemBrand").value = it ? it.brand : "";
-    document.getElementById("fItemPurchaseDate").value = it ? it.purchaseDate : "";
+    itemPurchaseDateCtl = setupUnknownDateField("fItemPurchaseDate", "fItemPurchaseDateUnknown", it ? it.purchaseDate : "");
     document.getElementById("fItemPrice").value = it ? it.price : "";
+    refreshItemPlaceList();
     document.getElementById("fItemPlace").value = it ? it.place : "";
-    document.getElementById("fItemOpenDate").value = it ? it.openDate : "";
-    document.getElementById("fItemUsedUpDate").value = it ? it.usedUpDate : "";
+    itemOpenDateCtl = setupUnknownDateField("fItemOpenDate", "fItemOpenDateUnknown", it ? it.openDate : "");
+    itemUsedUpDateCtl = setupUnknownDateField("fItemUsedUpDate", "fItemUsedUpDateUnknown", it ? it.usedUpDate : "");
     document.getElementById("fItemReview").value = it ? it.review : "";
     document.getElementById("fItemIngredient").value = it ? it.ingredient : "";
     itemPhotoCtl = setupPhotoDrop("itemPhotoDrop","itemPhotoHint","fItemPhotoInput", 720, 0.65, it ? it.photo : null);
@@ -1008,24 +1038,24 @@
       subcategory: subcatBtn ? subcatBtn.dataset.value : "",
       name: name,
       brand: document.getElementById("fItemBrand").value.trim(),
-      purchaseDate: document.getElementById("fItemPurchaseDate").value,
+      purchaseDate: itemPurchaseDateCtl ? itemPurchaseDateCtl.get() : "",
       price: document.getElementById("fItemPrice").value,
       place: document.getElementById("fItemPlace").value.trim(),
-      openDate: document.getElementById("fItemOpenDate").value,
-      usedUpDate: document.getElementById("fItemUsedUpDate").value,
+      openDate: itemOpenDateCtl ? itemOpenDateCtl.get() : "",
+      usedUpDate: itemUsedUpDateCtl ? itemUsedUpDateCtl.get() : "",
       review: document.getElementById("fItemReview").value.trim(),
       ingredient: document.getElementById("fItemIngredient").value.trim(),
       photo: (itemPhotoCtl ? itemPhotoCtl.get() : null) || ""
     };
     var idx = STATE.items.findIndex(function(it){ return it.id === id; });
     if(idx === -1){ STATE.items.push(fields); } else { STATE.items[idx] = fields; }
-    if(persist()){ closeItemModal(); renderItemList(); refreshItemNameList(); }
+    if(persist()){ closeItemModal(); renderItemList(); refreshItemNameList(); refreshItemPlaceList(); }
   });
   document.getElementById("btnItemDelete").addEventListener("click", function(){
     var id = itemState.editingId;
     if(!id || !confirm("このアイテムを削除しますか？")) return;
     STATE.items = STATE.items.filter(function(it){ return it.id !== id; });
-    if(persist()){ closeItemModal(); renderItemList(); refreshItemNameList(); }
+    if(persist()){ closeItemModal(); renderItemList(); refreshItemNameList(); refreshItemPlaceList(); }
   });
   document.getElementById("itemSearch").addEventListener("input", renderItemList);
   document.getElementById("itemSort").addEventListener("change", renderItemList);
@@ -1043,8 +1073,21 @@
     });
   }
 
+  function refreshItemPlaceList(){
+    var dl = document.getElementById("itemPlaceList");
+    dl.innerHTML = "";
+    var seen = {};
+    readItems().forEach(function(it){
+      if(!it.place || seen[it.place]) return;
+      seen[it.place] = true;
+      var opt = document.createElement("option");
+      opt.value = it.place;
+      dl.appendChild(opt);
+    });
+  }
+
   // ================= LOOKBOOK TAB =================
-  var lookState = { editingId: null, filters: { cat:null, color:null, personalColor:null, skeleton:null, season:null, texture:null } };
+  var lookState = { editingId: null, filters: { cat:[], color:[], personalColor:[], skeleton:[], season:[], texture:[] } };
 
   function buildMultiPicker(container, selected, options, colorMap){
     container.innerHTML = "";
@@ -1073,40 +1116,45 @@
     el.innerHTML = "";
     var allBtn = document.createElement("button");
     allBtn.textContent = allLabel;
-    if(!lookState.filters[filterKey]) allBtn.classList.add("active");
+    if(lookState.filters[filterKey].length === 0) allBtn.classList.add("active");
     allBtn.addEventListener("click", function(){
-      lookState.filters[filterKey] = null;
+      lookState.filters[filterKey] = [];
       renderLookList(); buildLookFilterChips(elId, allLabel, options, filterKey);
     });
     el.appendChild(allBtn);
     options.forEach(function(v){
       var b = document.createElement("button");
       b.textContent = v;
-      if(lookState.filters[filterKey] === v) b.classList.add("active");
+      if(lookState.filters[filterKey].indexOf(v) !== -1) b.classList.add("active");
       b.addEventListener("click", function(){
-        lookState.filters[filterKey] = v;
+        var arr = lookState.filters[filterKey];
+        var idx = arr.indexOf(v);
+        if(idx === -1){ arr.push(v); } else { arr.splice(idx,1); }
         renderLookList(); buildLookFilterChips(elId, allLabel, options, filterKey);
       });
       el.appendChild(b);
     });
   }
-  function buildLookCatFilter(){ buildLookFilterChips("lookCatFilter", "すべての項目", LOOK_CATS, "cat"); }
-  function buildLookColorFilter(){ buildLookFilterChips("lookColorFilter", "すべての色", COLOR_PRESETS.map(function(c){return c[0];}), "color"); }
-  function buildLookPersonalColorFilter(){ buildLookFilterChips("lookPersonalColorFilter", "すべてのパーソナルカラー", PERSONAL_COLORS, "personalColor"); }
-  function buildLookSkeletonFilter(){ buildLookFilterChips("lookSkeletonFilter", "すべての骨格", SKELETON_TYPES, "skeleton"); }
-  function buildLookSeasonFilter(){ buildLookFilterChips("lookSeasonFilter", "すべての季節", SEASONS, "season"); }
-  function buildLookTextureFilter(){ buildLookFilterChips("lookTextureFilter", "すべての質感", TEXTURES, "texture"); }
+  function buildLookCatFilter(){ buildLookFilterChips("lookCatFilter", "すべて", LOOK_CATS, "cat"); }
+  function buildLookColorFilter(){ buildLookFilterChips("lookColorFilter", "すべて", COLOR_PRESETS.map(function(c){return c[0];}), "color"); }
+  function buildLookPersonalColorFilter(){ buildLookFilterChips("lookPersonalColorFilter", "すべて", PERSONAL_COLORS, "personalColor"); }
+  function buildLookSkeletonFilter(){ buildLookFilterChips("lookSkeletonFilter", "すべて", SKELETON_TYPES, "skeleton"); }
+  function buildLookSeasonFilter(){ buildLookFilterChips("lookSeasonFilter", "すべて", SEASONS, "season"); }
+  function buildLookTextureFilter(){ buildLookFilterChips("lookTextureFilter", "すべて", TEXTURES, "texture"); }
 
   function renderLookList(){
     var looks = readLooks();
     var q = document.getElementById("lookSearch").value.trim().toLowerCase();
     var f = lookState.filters;
-    if(f.cat) looks = looks.filter(function(l){ return l.categories.indexOf(f.cat) !== -1; });
-    if(f.color) looks = looks.filter(function(l){ return l.colors.indexOf(f.color) !== -1; });
-    if(f.personalColor) looks = looks.filter(function(l){ return l.personalColors.indexOf(f.personalColor) !== -1; });
-    if(f.skeleton) looks = looks.filter(function(l){ return l.skeletons.indexOf(f.skeleton) !== -1; });
-    if(f.season) looks = looks.filter(function(l){ return l.seasons.indexOf(f.season) !== -1; });
-    if(f.texture) looks = looks.filter(function(l){ return l.textures.indexOf(f.texture) !== -1; });
+    function overlaps(sel, vals){ return sel.length === 0 || vals.some(function(v){ return sel.indexOf(v) !== -1; }); }
+    looks = looks.filter(function(l){
+      return overlaps(f.cat, l.categories) &&
+        overlaps(f.color, l.colors) &&
+        overlaps(f.personalColor, l.personalColors) &&
+        overlaps(f.skeleton, l.skeletons) &&
+        overlaps(f.season, l.seasons) &&
+        overlaps(f.texture, l.textures);
+    });
     if(q){
       looks = looks.filter(function(l){
         var hay = [l.memo, l.categories.join(" "), l.personalColors.join(" "), l.skeletons.join(" "), l.seasons.join(" "), l.textures.join(" ")].join(" ").toLowerCase();
@@ -1286,6 +1334,7 @@
     renderItemList();
     renderLookList();
     refreshItemNameList();
+    refreshItemPlaceList();
   }
 
   function boot(){
