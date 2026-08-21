@@ -540,7 +540,9 @@
   <div class="modal">
     <h3>データのバックアップ</h3>
     <p class="backup-note">記録はこの端末・このブラウザだけに保存されています（他の端末とは自動で同期しません）。機種変更や消去に備えて、ときどきバックアップを取っておくことをおすすめします。</p>
-    <button class="btn-primary" id="btnBackupSave" style="width:100%;">バックアップを保存する</button>
+    <p class="backup-note" id="lastBackupNote" style="margin-top:-10px;"></p>
+    <button class="btn-primary" id="btnBackupSave" style="width:100%;">バックアップをファイルに保存する</button>
+    <button class="btn-ghost" id="btnBackupCopyToggle" style="margin-top:8px;width:100%;">文字としてコピーする</button>
     <div id="backupFallback" style="display:none;margin-top:12px;">
       <textarea class="backup-text" id="backupText" readonly rows="4"></textarea>
       <button class="btn-ghost" id="btnBackupCopy" style="margin-top:8px;width:100%;">コピーする</button>
@@ -595,8 +597,8 @@
   ];
 
   var LS_KEY = "biyounote.v1";
+  var LAST_BACKUP_KEY = "biyounote.lastBackup";
   var STATE = loadState();
-  var downloadsApi = null;
 
   function loadState(){
     try{
@@ -1218,31 +1220,45 @@
   document.getElementById("lookSearch").addEventListener("input", renderLookList);
 
   // ---------------- backup / restore ----------------
+  function renderLastBackupNote(){
+    var el = document.getElementById("lastBackupNote");
+    var iso = localStorage.getItem(LAST_BACKUP_KEY);
+    if(!iso){ el.textContent = "まだバックアップを取っていません"; return; }
+    var days = daysSince(iso);
+    el.textContent = days <= 0 ? "最終バックアップ: 今日" : "最終バックアップ: " + days + "日前";
+  }
+  function markBackedUp(){
+    try{ localStorage.setItem(LAST_BACKUP_KEY, isoLocal(new Date())); }catch(e){}
+    renderLastBackupNote();
+  }
+
   document.getElementById("btnBackup").addEventListener("click", function(){
     document.getElementById("backupFallback").style.display = "none";
+    renderLastBackupNote();
     document.getElementById("modalBackup").classList.add("show");
   });
   document.getElementById("btnBackupClose").addEventListener("click", function(){
     document.getElementById("modalBackup").classList.remove("show");
   });
-  document.getElementById("btnBackupSave").addEventListener("click", async function(){
+  document.getElementById("btnBackupSave").addEventListener("click", function(){
     var json = JSON.stringify(STATE);
     var filename = "美容ノート_" + isoLocal(new Date()).replace(/-/g,"") + ".json";
-    if(downloadsApi){
-      try{
-        await downloadsApi.save({ filename: filename, data: json });
-        return;
-      }catch(err){
-        if(err && err.code === "declined") return;
-      }
-    }
-    document.getElementById("backupText").value = json;
+    var blob = new Blob([json], { type: "application/json" });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement("a");
+    a.href = url; a.download = filename;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(function(){ URL.revokeObjectURL(url); }, 2000);
+    markBackedUp();
+  });
+  document.getElementById("btnBackupCopyToggle").addEventListener("click", function(){
+    document.getElementById("backupText").value = JSON.stringify(STATE);
     document.getElementById("backupFallback").style.display = "block";
   });
   document.getElementById("btnBackupCopy").addEventListener("click", async function(){
     var ta = document.getElementById("backupText");
     ta.focus(); ta.select();
-    try{ await navigator.clipboard.writeText(ta.value); alert("コピーしました"); }
+    try{ await navigator.clipboard.writeText(ta.value); markBackedUp(); alert("コピーしました"); }
     catch(e){ alert("自動コピーができませんでした。テキストを選択してコピーしてください。"); }
   });
   document.getElementById("fBackupRestore").addEventListener("change", function(){
@@ -1272,7 +1288,7 @@
     refreshItemNameList();
   }
 
-  async function boot(){
+  function boot(){
     buildGenreFilterChips();
     buildSubcatFilterChips();
     buildLookCatFilter();
@@ -1282,8 +1298,8 @@
     buildLookSeasonFilter();
     buildLookTextureFilter();
     renderAll();
-    if(window.claude && window.claude.use){
-      downloadsApi = await window.claude.use("downloads");
+    if(navigator.storage && navigator.storage.persist){
+      navigator.storage.persist().catch(function(){});
     }
   }
   boot();
