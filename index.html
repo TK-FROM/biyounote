@@ -175,7 +175,11 @@
   }
   .log-photo{ width:100%; aspect-ratio:16/10; object-fit:cover; display:block; }
   .log-body{ padding:13px 15px 14px; }
-  .log-head-row{ display:flex; align-items:center; gap:8px; }
+  .log-head-row{ display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+  .time-chip{
+    display:inline-block; font-size:11px; font-weight:700; padding:3px 10px;
+    border-radius:var(--radius-pill); background:var(--accent-soft); color:var(--accent-soft-text);
+  }
   .log-date-text{ font-weight:800; font-size:13.5px; }
   .mood-pill{
     display:inline-block; font-size:11px; font-weight:700; padding:3px 10px;
@@ -414,12 +418,17 @@
       <input type="date" id="fLogDate">
     </div>
     <div class="field">
+      <label>時間帯</label>
+      <div class="genre-pick" id="fLogTimes"></div>
+    </div>
+    <div class="field">
       <label>肌・体のコンディション</label>
       <div class="mood-pick" id="fLogMood"></div>
     </div>
     <div class="field">
       <label>使用したアイテム（複数選択できます）</label>
-      <div class="genre-pick" id="fLogItemsPicker"></div>
+      <input class="search-input" type="text" id="fLogItemsSearch" placeholder="アイテムを検索" style="margin-bottom:8px;width:100%;">
+      <div id="fLogItemsPicker"></div>
       <input type="text" id="fLogItemsExtra" style="margin-top:8px;" placeholder="リストにないものはここにカンマ区切りで入力">
     </div>
     <div class="field">
@@ -588,6 +597,7 @@
     "メイク": ["ベース","アイメイク","チーク","リップ"]
   };
   var LOOK_CATS = ["髪型","メイク","コスメ","その他"];
+  var TIME_SLOTS = ["朝","昼","夜","メイク"];
   var COLOR_PRESETS = [
     ["ベージュ","#C9AE8C"],["ブラウン","#7B5236"],["レッド","#B23A3A"],["ピンク","#E497B0"],
     ["オレンジ","#D98A3D"],["イエロー","#E3C24A"],["グリーン","#6E9A6B"],["ブルー","#4C7EA8"],
@@ -775,18 +785,21 @@
       var ms = moodStyle(log.mood);
 
       var photoHtml = log.photo ? '<img class="log-photo" alt="">' : "";
+      var times = log.times || [];
+      var timesHtml = times.map(function(t){ return '<span class="time-chip"></span>'; }).join("");
       var moodHtml = log.mood ? '<span class="mood-pill" style="background:'+ms.bg+';color:'+ms.fg+'">'+ms.v+'</span>' : "";
       var itemsHtml = log.items.map(function(t){ return '<span class="tag-chip"></span>'; }).join("");
       card.innerHTML =
         photoHtml +
         '<div class="log-body">'+
-          '<div class="log-head-row"><span class="log-date-text num"></span>'+moodHtml+
+          '<div class="log-head-row"><span class="log-date-text num"></span>'+timesHtml+moodHtml+
             '<div class="card-actions"><button class="icon-btn" type="button">✎</button></div></div>'+
           '<div class="log-items">'+itemsHtml+'</div>'+
           (log.memo ? '<p class="log-memo"></p>' : "") +
         '</div>';
       if(log.photo) card.querySelector(".log-photo").src = log.photo;
       card.querySelector(".log-date-text").textContent = logDateLabel(log.date);
+      card.querySelectorAll(".time-chip").forEach(function(el, i){ el.textContent = times[i]; });
       card.querySelectorAll(".tag-chip").forEach(function(el, i){ el.textContent = log.items[i]; });
       if(log.memo) card.querySelector(".log-memo").textContent = log.memo;
       card.querySelector(".icon-btn").addEventListener("click", function(){ openLogModal(log); });
@@ -810,14 +823,72 @@
     });
   }
 
+  function groupKnownItemLabels(){
+    var byGenre = {}, seen = {};
+    GENRES.forEach(function(g){ byGenre[g] = []; });
+    readItems().forEach(function(it){
+      if(!it.name || seen[it.name]) return;
+      seen[it.name] = true;
+      (byGenre[it.genre] || (byGenre[it.genre] = [])).push(it.name);
+    });
+    var otherNames = [];
+    STATE.logs.forEach(function(l){
+      (l.items||[]).forEach(function(name){
+        if(!name || seen[name]) return;
+        seen[name] = true; otherNames.push(name);
+      });
+    });
+    var groups = GENRES.map(function(g){ return { label: g, names: byGenre[g] || [] }; }).filter(function(gr){ return gr.names.length; });
+    if(otherNames.length) groups.push({ label: "その他", names: otherNames });
+    return groups;
+  }
+
+  var logItemsState = { selected: [] };
+  function renderLogItemsPicker(query){
+    var container = document.getElementById("fLogItemsPicker");
+    container.innerHTML = "";
+    var q = (query || "").trim().toLowerCase();
+    groupKnownItemLabels().forEach(function(g){
+      var names = g.names.filter(function(n){ return !q || n.toLowerCase().indexOf(q) !== -1; });
+      if(!names.length) return;
+      var head = document.createElement("div");
+      head.className = "filter-label"; head.style.margin = "10px 0 5px";
+      head.textContent = g.label;
+      container.appendChild(head);
+      var wrap = document.createElement("div");
+      wrap.className = "genre-pick";
+      names.forEach(function(n){
+        var b = document.createElement("button");
+        b.type = "button"; b.className = "pick-btn" + (logItemsState.selected.indexOf(n) !== -1 ? " sel" : "");
+        b.textContent = n;
+        b.addEventListener("click", function(){
+          var idx = logItemsState.selected.indexOf(n);
+          if(idx === -1){ logItemsState.selected.push(n); } else { logItemsState.selected.splice(idx,1); }
+          b.classList.toggle("sel");
+        });
+        wrap.appendChild(b);
+      });
+      container.appendChild(wrap);
+    });
+    if(!container.children.length){
+      container.innerHTML = '<div class="hint">該当するアイテムがありません</div>';
+    }
+  }
+  document.getElementById("fLogItemsSearch").addEventListener("input", function(){
+    renderLogItemsPicker(this.value);
+  });
+
   var logPhotoCtl = null;
-  var logItemsPickerCtl = null;
+  var logTimesCtl = null;
   function openLogModal(log){
     logState.editingId = log ? log.id : null;
     document.getElementById("modalLogTitle").textContent = log ? "記録を編集" : "今日の記録";
     document.getElementById("fLogDate").value = log ? log.date : isoLocal(new Date());
+    logTimesCtl = buildMultiPicker(document.getElementById("fLogTimes"), log ? (log.times || []) : [], TIME_SLOTS);
     buildMoodPicker(document.getElementById("fLogMood"), log ? log.mood : "");
-    logItemsPickerCtl = buildMultiPicker(document.getElementById("fLogItemsPicker"), log ? log.items : [], allKnownItemLabels());
+    logItemsState.selected = log ? log.items.slice() : [];
+    document.getElementById("fLogItemsSearch").value = "";
+    renderLogItemsPicker("");
     document.getElementById("fLogItemsExtra").value = "";
     document.getElementById("fLogMemo").value = log ? log.memo : "";
     logPhotoCtl = setupPhotoDrop("logPhotoDrop","logPhotoHint","fLogPhotoInput", 640, 0.6, log ? log.photo : null);
@@ -830,15 +901,15 @@
   document.getElementById("btnLogSave").addEventListener("click", async function(){
     var date = document.getElementById("fLogDate").value;
     if(!date){ alert("日付を入力してください"); return; }
+    var times = logTimesCtl ? logTimesCtl.get() : [];
     var moodBtn = document.querySelector("#fLogMood .pick-btn.sel");
     var mood = moodBtn ? moodBtn.dataset.value : "";
-    var pickedItems = logItemsPickerCtl ? logItemsPickerCtl.get() : [];
     var extraItems = document.getElementById("fLogItemsExtra").value.split(",").map(function(s){return s.trim();}).filter(Boolean);
-    var items = pickedItems.concat(extraItems).filter(function(v,i,arr){ return arr.indexOf(v) === i; });
+    var items = logItemsState.selected.concat(extraItems).filter(function(v,i,arr){ return arr.indexOf(v) === i; });
     var memo = document.getElementById("fLogMemo").value.trim();
     var photo = logPhotoCtl ? logPhotoCtl.get() : null;
     var id = logState.editingId || uid();
-    var fields = { id: id, date: date, mood: mood, items: items, memo: memo, photo: photo || "" };
+    var fields = { id: id, date: date, times: times, mood: mood, items: items, memo: memo, photo: photo || "" };
     var idx = STATE.logs.findIndex(function(l){ return l.id === id; });
     if(idx === -1){ STATE.logs.push(fields); } else { STATE.logs[idx] = fields; }
     if(persist()){ closeLogModal(); renderLogList(); }
@@ -1059,21 +1130,6 @@
   });
   document.getElementById("itemSearch").addEventListener("input", renderItemList);
   document.getElementById("itemSort").addEventListener("change", renderItemList);
-
-  function allKnownItemLabels(){
-    var seen = {}, out = [];
-    readItems().forEach(function(it){
-      if(!it.name || seen[it.name]) return;
-      seen[it.name] = true; out.push(it.name);
-    });
-    STATE.logs.forEach(function(l){
-      (l.items||[]).forEach(function(name){
-        if(!name || seen[name]) return;
-        seen[name] = true; out.push(name);
-      });
-    });
-    return out;
-  }
 
   function refreshItemPlaceList(){
     var dl = document.getElementById("itemPlaceList");
