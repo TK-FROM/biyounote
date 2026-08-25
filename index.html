@@ -6,10 +6,10 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Unbounded:wght@500;600;700;800&family=Manrope:wght@400;500;600;700;800&display=swap">
 <style>
   :root{
-    --bg:#FBF3F1; --surface:#FFFFFF; --surface-alt:#F7E9E4;
+    --bg:#EAF6FB; --surface:#FFFFFF; --surface-alt:#F7E9E4;
     --text:#201319; --text-muted:#8C787C;
     --accent:#FF3E6C; --accent-strong:#E01E52; --accent-soft:#FFDCE6; --accent-soft-text:#C41752;
-    --streak:#FF7A1A; --streak-soft:#FFE3CC;
+    --streak:#2FA9DB; --streak-soft:#D2EEFA;
     --line:#F0DFDA;
     --good:#4E8F72; --good-soft:#DDEEE3;
     --warn:#B96A2E; --warn-soft:#F5E1CE;
@@ -24,7 +24,7 @@
       --bg:#140C10; --surface:#1F1519; --surface-alt:#271A1F;
       --text:#FBF0F3; --text-muted:#B99DA4;
       --accent:#FF6D93; --accent-strong:#FF3E6C; --accent-soft:#3D1C29; --accent-soft-text:#FFAAC1;
-      --streak:#FF9B4D; --streak-soft:#3A2415;
+      --streak:#5CC5EE; --streak-soft:#123544;
       --line:#372228;
       --good:#7FBF9B; --good-soft:#213329;
       --warn:#E0A05C; --warn-soft:#3E2E1C;
@@ -38,7 +38,7 @@
     --bg:#140C10; --surface:#1F1519; --surface-alt:#271A1F;
     --text:#FBF0F3; --text-muted:#B99DA4;
     --accent:#FF6D93; --accent-strong:#FF3E6C; --accent-soft:#3D1C29; --accent-soft-text:#FFAAC1;
-    --streak:#FF9B4D; --streak-soft:#3A2415;
+    --streak:#5CC5EE; --streak-soft:#123544;
     --line:#372228;
     --good:#7FBF9B; --good-soft:#213329;
     --warn:#E0A05C; --warn-soft:#3E2E1C;
@@ -98,11 +98,13 @@
   .panel.active{ display:block; }
 
   .streak-week{ display:flex; gap:7px; margin-bottom:18px; }
-  .streak-dot-wrap{ display:flex; flex-direction:column; align-items:center; gap:5px; flex:1; }
+  .streak-dot-wrap{ display:flex; flex-direction:column; align-items:center; gap:5px; flex:1; background:none; border:none; padding:0; cursor:pointer; font-family:inherit; }
   .streak-dot{ width:100%; aspect-ratio:1/1; max-width:32px; border-radius:9px; background:var(--surface-alt); border:1px solid var(--line); }
   .streak-dot.on{ background:var(--streak); border-color:var(--streak); }
   .streak-dot.today{ box-shadow:0 0 0 2px var(--bg), 0 0 0 3.5px var(--streak); }
-  .streak-dow{ font-size:10px; color:var(--text-muted); font-weight:700; }
+  .streak-dow{ text-align:center; line-height:1.25; }
+  .streak-dow .streak-dow-date{ display:block; font-size:10px; color:var(--text); font-weight:700; }
+  .streak-dow .streak-dow-wd{ display:block; font-size:9.5px; color:var(--text-muted); font-weight:700; }
 
   .panel-head{ display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:14px; flex-wrap:wrap; }
   .panel-head h2{ font-size:20px; font-weight:600; margin:0; }
@@ -443,6 +445,17 @@
   </div>
 </div>
 
+<!-- ===== modal: day detail ===== -->
+<div class="modal-overlay" id="modalDayDetail">
+  <div class="modal">
+    <h3 id="modalDayDetailTitle">記録</h3>
+    <div id="dayDetailList"></div>
+    <div class="modal-actions">
+      <button class="btn-ghost" id="btnDayDetailClose" style="width:100%;">閉じる</button>
+    </div>
+  </div>
+</div>
+
 <!-- ===== modal: item ===== -->
 <div class="modal-overlay" id="modalItem">
   <div class="modal">
@@ -757,15 +770,51 @@
     for(var i=6;i>=0;i--){
       var d = new Date(today); d.setDate(d.getDate()-i);
       var iso = isoLocal(d);
-      var wrap = document.createElement("div");
+      var wrap = document.createElement("button");
+      wrap.type = "button";
       wrap.className = "streak-dot-wrap";
       var dot = document.createElement("div");
       dot.className = "streak-dot" + (days[iso] ? " on" : "") + (iso === todayIso ? " today" : "");
       var label = document.createElement("div");
-      label.className = "streak-dow"; label.textContent = dow[d.getDay()];
+      label.className = "streak-dow";
+      var dateEl = document.createElement("span");
+      dateEl.className = "streak-dow-date"; dateEl.textContent = (d.getMonth()+1)+"/"+d.getDate();
+      var wdEl = document.createElement("span");
+      wdEl.className = "streak-dow-wd"; wdEl.textContent = dow[d.getDay()];
+      label.appendChild(dateEl); label.appendChild(wdEl);
       wrap.appendChild(dot); wrap.appendChild(label);
+      wrap.addEventListener("click", function(clickedIso){
+        return function(){ openDayDetail(clickedIso); };
+      }(iso));
       week.appendChild(wrap);
     }
+  }
+
+  function buildLogCard(log){
+    var card = document.createElement("div");
+    card.className = "log-card";
+    var ms = moodStyle(log.mood);
+
+    var photoHtml = log.photo ? '<img class="log-photo" alt="">' : "";
+    var times = log.times || [];
+    var timesHtml = times.map(function(t){ return '<span class="time-chip"></span>'; }).join("");
+    var moodHtml = log.mood ? '<span class="mood-pill" style="background:'+ms.bg+';color:'+ms.fg+'">'+ms.v+'</span>' : "";
+    var itemsHtml = log.items.map(function(t){ return '<span class="tag-chip"></span>'; }).join("");
+    card.innerHTML =
+      photoHtml +
+      '<div class="log-body">'+
+        '<div class="log-head-row"><span class="log-date-text num"></span>'+timesHtml+moodHtml+
+          '<div class="card-actions"><button class="icon-btn" type="button">✎</button></div></div>'+
+        '<div class="log-items">'+itemsHtml+'</div>'+
+        (log.memo ? '<p class="log-memo"></p>' : "") +
+      '</div>';
+    if(log.photo) card.querySelector(".log-photo").src = log.photo;
+    card.querySelector(".log-date-text").textContent = logDateLabel(log.date);
+    card.querySelectorAll(".time-chip").forEach(function(el, i){ el.textContent = times[i]; });
+    card.querySelectorAll(".tag-chip").forEach(function(el, i){ el.textContent = log.items[i]; });
+    if(log.memo) card.querySelector(".log-memo").textContent = log.memo;
+    card.querySelector(".icon-btn").addEventListener("click", function(){ openLogModal(log); });
+    return card;
   }
 
   function renderLogList(){
@@ -779,35 +828,28 @@
     }
     var wrap = document.createElement("div");
     wrap.className = "log-list";
-    logs.forEach(function(log){
-      var card = document.createElement("div");
-      card.className = "log-card";
-      var ms = moodStyle(log.mood);
-
-      var photoHtml = log.photo ? '<img class="log-photo" alt="">' : "";
-      var times = log.times || [];
-      var timesHtml = times.map(function(t){ return '<span class="time-chip"></span>'; }).join("");
-      var moodHtml = log.mood ? '<span class="mood-pill" style="background:'+ms.bg+';color:'+ms.fg+'">'+ms.v+'</span>' : "";
-      var itemsHtml = log.items.map(function(t){ return '<span class="tag-chip"></span>'; }).join("");
-      card.innerHTML =
-        photoHtml +
-        '<div class="log-body">'+
-          '<div class="log-head-row"><span class="log-date-text num"></span>'+timesHtml+moodHtml+
-            '<div class="card-actions"><button class="icon-btn" type="button">✎</button></div></div>'+
-          '<div class="log-items">'+itemsHtml+'</div>'+
-          (log.memo ? '<p class="log-memo"></p>' : "") +
-        '</div>';
-      if(log.photo) card.querySelector(".log-photo").src = log.photo;
-      card.querySelector(".log-date-text").textContent = logDateLabel(log.date);
-      card.querySelectorAll(".time-chip").forEach(function(el, i){ el.textContent = times[i]; });
-      card.querySelectorAll(".tag-chip").forEach(function(el, i){ el.textContent = log.items[i]; });
-      if(log.memo) card.querySelector(".log-memo").textContent = log.memo;
-      card.querySelector(".icon-btn").addEventListener("click", function(){ openLogModal(log); });
-
-      wrap.appendChild(card);
-    });
+    logs.forEach(function(log){ wrap.appendChild(buildLogCard(log)); });
     view.appendChild(wrap);
   }
+
+  function openDayDetail(iso){
+    var logs = readLogs().filter(function(l){ return l.date === iso; });
+    document.getElementById("modalDayDetailTitle").textContent = logDateLabel(iso) + "の記録";
+    var list = document.getElementById("dayDetailList");
+    list.innerHTML = "";
+    if(logs.length === 0){
+      list.innerHTML = '<div class="empty-state"><div class="disp">記録がありません</div></div>';
+    } else {
+      var wrap = document.createElement("div");
+      wrap.className = "log-list";
+      logs.forEach(function(log){ wrap.appendChild(buildLogCard(log)); });
+      list.appendChild(wrap);
+    }
+    document.getElementById("modalDayDetail").classList.add("show");
+  }
+  document.getElementById("btnDayDetailClose").addEventListener("click", function(){
+    document.getElementById("modalDayDetail").classList.remove("show");
+  });
 
   function buildMoodPicker(container, selected){
     container.innerHTML = "";
