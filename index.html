@@ -3,12 +3,14 @@
 <meta name="apple-mobile-web-app-title" content="美容ノート">
 <meta name="theme-color" content="#FF3E6C">
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Unbounded:wght@500;600;700;800&family=Manrope:wght@400;500;600;700;800&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zen+Maru+Gothic:wght@400;500;700;900&family=Manrope:wght@400;500;600;700;800&display=swap">
 <style>
   :root{
     --bg:#EAF6FB; --surface:#FFFFFF; --surface-alt:#F7E9E4;
     --text:#201319; --text-muted:#8C787C;
     --accent:#FF3E6C; --accent-strong:#E01E52; --accent-soft:#FFDCE6; --accent-soft-text:#C41752;
+    --accent2:#9B6BFF; --accent2-strong:#7C3FED;
+    --gradient-brand:linear-gradient(135deg, var(--accent) 0%, var(--accent2) 100%);
     --streak:#2FA9DB; --streak-soft:#D2EEFA;
     --line:#F0DFDA;
     --good:#4E8F72; --good-soft:#DDEEE3;
@@ -17,46 +19,53 @@
     --chip-skincare:#1B9C8C; --chip-haircare:#E39A2E; --chip-bodycare:#7C5FE0; --chip-makeup:#FF3E6C;
     --shadow:0 10px 26px -14px rgba(32,19,25,0.3);
     --shadow-sm:0 2px 8px -4px rgba(32,19,25,0.18);
+    --shadow-glow:0 10px 24px -8px rgba(255,62,108,.45), 0 4px 14px -6px rgba(155,107,255,.4);
     --radius-card:16px; --radius-pill:999px; --radius-photo:20px;
   }
   @media (prefers-color-scheme: dark){
     :root:not([data-theme="light"]){
-      --bg:#140C10; --surface:#1F1519; --surface-alt:#271A1F;
-      --text:#FBF0F3; --text-muted:#B99DA4;
+      --bg:#170B22; --surface:#241730; --surface-alt:#2C1C3A;
+      --text:#FBF0F3; --text-muted:#BCA3C9;
       --accent:#FF6D93; --accent-strong:#FF3E6C; --accent-soft:#3D1C29; --accent-soft-text:#FFAAC1;
+      --accent2:#C79CFF; --accent2-strong:#A96BFF;
+      --gradient-brand:linear-gradient(135deg, var(--accent) 0%, var(--accent2) 100%);
       --streak:#5CC5EE; --streak-soft:#123544;
-      --line:#372228;
+      --line:#3B2A4A;
       --good:#7FBF9B; --good-soft:#213329;
       --warn:#E0A05C; --warn-soft:#3E2E1C;
       --muted-chip:#2C1F24; --muted-chip-text:#C7ADB3;
       --chip-skincare:#4FC7B6; --chip-haircare:#EBB458; --chip-bodycare:#A793F0; --chip-makeup:#FF6D93;
       --shadow:0 14px 30px -16px rgba(0,0,0,0.6);
       --shadow-sm:0 2px 10px -4px rgba(0,0,0,0.5);
+      --shadow-glow:0 12px 28px -10px rgba(255,109,147,.5), 0 4px 16px -6px rgba(199,156,255,.45);
     }
   }
   :root[data-theme="dark"]{
-    --bg:#140C10; --surface:#1F1519; --surface-alt:#271A1F;
-    --text:#FBF0F3; --text-muted:#B99DA4;
+    --bg:#170B22; --surface:#241730; --surface-alt:#2C1C3A;
+    --text:#FBF0F3; --text-muted:#BCA3C9;
     --accent:#FF6D93; --accent-strong:#FF3E6C; --accent-soft:#3D1C29; --accent-soft-text:#FFAAC1;
+    --accent2:#C79CFF; --accent2-strong:#A96BFF;
+    --gradient-brand:linear-gradient(135deg, var(--accent) 0%, var(--accent2) 100%);
     --streak:#5CC5EE; --streak-soft:#123544;
-    --line:#372228;
+    --line:#3B2A4A;
     --good:#7FBF9B; --good-soft:#213329;
     --warn:#E0A05C; --warn-soft:#3E2E1C;
     --muted-chip:#2C1F24; --muted-chip-text:#C7ADB3;
     --chip-skincare:#4FC7B6; --chip-haircare:#EBB458; --chip-bodycare:#A793F0; --chip-makeup:#FF6D93;
     --shadow:0 14px 30px -16px rgba(0,0,0,0.6);
     --shadow-sm:0 2px 10px -4px rgba(0,0,0,0.5);
+    --shadow-glow:0 12px 28px -10px rgba(255,109,147,.5), 0 4px 16px -6px rgba(199,156,255,.45);
   }
 
   *{box-sizing:border-box;}
   html,body{margin:0;padding:0;}
   body{
     background:var(--bg); color:var(--text);
-    font-family:'Manrope',system-ui,-apple-system,'Hiragino Kaku Gothic ProN','Yu Gothic',sans-serif;
+    font-family:'Zen Maru Gothic','Manrope',system-ui,-apple-system,'Hiragino Kaku Gothic ProN','Yu Gothic',sans-serif;
     font-size:15px; line-height:1.6;
     -webkit-font-smoothing:antialiased;
   }
-  h1,h2,h3,.disp{ font-family:'Unbounded',system-ui,sans-serif; font-weight:600; text-wrap:balance; letter-spacing:-.01em; }
+  h1,h2,h3,.disp{ font-family:'Zen Maru Gothic',system-ui,sans-serif; font-weight:700; text-wrap:balance; letter-spacing:-.01em; }
   .num{ font-variant-numeric:tabular-nums; }
   a{ color:inherit; }
   button{ font-family:inherit; }
@@ -66,24 +75,27 @@
 
   .topbar{
     position:sticky; top:0; z-index:20;
-    background:var(--bg); padding:18px 16px 6px;
-    max-width:920px; margin:0 auto;
+    background:var(--gradient-brand); padding:20px 16px 22px;
+    max-width:100%; margin:0 auto; border-radius:0 0 26px 26px;
+    box-shadow:var(--shadow-glow);
   }
-  .brand{ display:flex; align-items:center; justify-content:space-between; gap:10px; margin:0 0 10px; }
-  .brand h1{ font-size:19px; font-weight:700; margin:0; letter-spacing:-.01em; }
-  .brand h1 .dot{ color:var(--accent); }
+  .topbar-inner{ max-width:920px; margin:0 auto; }
+  .brand{ display:flex; align-items:center; justify-content:space-between; gap:10px; margin:0; }
+  .brand h1{ font-size:20px; font-weight:900; margin:0; letter-spacing:-.01em; color:#fff; text-shadow:0 2px 10px rgba(0,0,0,.12); }
+  .brand h1 .dot{ display:inline-block; filter:drop-shadow(0 1px 4px rgba(0,0,0,.15)); }
 
   .streak-badge{
-    display:flex; align-items:center; gap:5px; border:none; cursor:pointer;
-    background:var(--streak-soft); color:var(--streak);
+    display:flex; align-items:center; gap:5px; border:1px solid rgba(255,255,255,.55); cursor:pointer;
+    background:rgba(255,255,255,.22); backdrop-filter:blur(6px); -webkit-backdrop-filter:blur(6px); color:#fff;
     border-radius:var(--radius-pill); padding:7px 13px 7px 10px;
     font-weight:800; font-size:14px;
   }
-  .streak-badge.zero{ background:var(--muted-chip); color:var(--muted-chip-text); }
+  .streak-badge.zero{ background:rgba(255,255,255,.14); color:rgba(255,255,255,.85); }
   .streak-flame{ font-size:15px; line-height:1; }
 
   .topbar-icon-btn{
-    border:none; background:var(--surface-alt); color:var(--text-muted);
+    border:1px solid rgba(255,255,255,.55); background:rgba(255,255,255,.22); color:#fff;
+    backdrop-filter:blur(6px); -webkit-backdrop-filter:blur(6px);
     width:34px; height:34px; border-radius:50%; flex:none;
     display:flex; align-items:center; justify-content:center; cursor:pointer;
   }
@@ -97,14 +109,25 @@
   .panel{ display:none; }
   .panel.active{ display:block; }
 
-  .streak-week{ display:flex; gap:7px; margin-bottom:18px; }
-  .streak-dot-wrap{ display:flex; flex-direction:column; align-items:center; gap:5px; flex:1; background:none; border:none; padding:0; cursor:pointer; font-family:inherit; }
-  .streak-dot{ width:100%; aspect-ratio:1/1; max-width:32px; border-radius:9px; background:var(--surface-alt); border:1px solid var(--line); }
-  .streak-dot.on{ background:var(--streak); border-color:var(--streak); }
-  .streak-dot.today{ box-shadow:0 0 0 2px var(--bg), 0 0 0 3.5px var(--streak); }
-  .streak-dow{ text-align:center; line-height:1.25; }
-  .streak-dow .streak-dow-date{ display:block; font-size:10px; color:var(--text); font-weight:700; }
-  .streak-dow .streak-dow-wd{ display:block; font-size:9.5px; color:var(--text-muted); font-weight:700; }
+  .streak-week{ display:flex; gap:6px; margin-bottom:18px; }
+  .day-pill{
+    flex:1; min-width:0; display:flex; flex-direction:column; align-items:center; gap:1px;
+    padding:9px 0 8px; border-radius:16px; cursor:pointer; font-family:inherit;
+    background:var(--surface); border:1.5px solid var(--line);
+    transition:transform .12s ease;
+  }
+  .day-pill:active{ transform:scale(.94); }
+  .day-pill .day-wd{ font-size:10px; font-weight:700; color:var(--text-muted); line-height:1.3; }
+  .day-pill .day-date{ font-size:13.5px; font-weight:800; color:var(--text); line-height:1.3; }
+  .day-pill .day-mark{
+    width:7px; height:7px; border-radius:50%; margin-top:4px;
+    background:var(--line);
+  }
+  .day-pill.on{ background:var(--streak-soft); border-color:var(--streak); }
+  .day-pill.on .day-date{ color:var(--streak); }
+  .day-pill.on .day-mark{ background:var(--streak); box-shadow:0 0 6px var(--streak); }
+  .day-pill.today{ border-color:var(--streak); border-width:2.5px; padding:8px 0 7px; }
+  .day-pill.today .day-wd{ color:var(--streak); }
 
   .panel-head{ display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:14px; flex-wrap:wrap; }
   .panel-head h2{ font-size:20px; font-weight:600; margin:0; }
@@ -130,16 +153,21 @@
   .tab-btn svg{ width:20px; height:20px; }
   .tab-btn.active{ color:var(--accent); }
   .fab{
-    flex:0 0 auto; width:52px; height:52px; margin:0 6px; border-radius:50%;
-    background:var(--accent); color:#fff; border:none; cursor:pointer;
+    flex:0 0 auto; width:54px; height:54px; margin:0 6px; border-radius:50%;
+    background:var(--gradient-brand); color:#fff; border:none; cursor:pointer;
     display:flex; align-items:center; justify-content:center;
-    box-shadow:0 10px 20px -8px rgba(255,62,108,.6);
+    box-shadow:var(--shadow-glow);
     transform:translateY(-14px);
+    animation:fabPulse 2.6s ease-in-out infinite;
   }
   .fab svg{ width:24px; height:24px; }
-  .fab:hover{ background:var(--accent-strong); }
+  .fab:hover{ filter:brightness(1.06); }
   .fab:active{ transform:translateY(-14px) scale(.94); }
-  .fab[disabled]{ opacity:.4; cursor:not-allowed; }
+  .fab[disabled]{ opacity:.4; cursor:not-allowed; animation:none; }
+  @keyframes fabPulse{
+    0%,100%{ box-shadow:var(--shadow-glow); }
+    50%{ box-shadow:0 10px 30px -6px rgba(255,62,108,.65), 0 4px 20px -4px rgba(155,107,255,.55); }
+  }
 
   .toolbar{ display:flex; flex-wrap:wrap; gap:8px; margin-bottom:16px; align-items:center; }
   .search-input{
@@ -283,10 +311,11 @@
   .photo-drop input{ position:absolute; inset:0; opacity:0; cursor:pointer; }
   .modal-actions{ display:flex; gap:10px; margin-top:18px; }
   .btn-primary{
-    flex:1; background:var(--accent); color:#fff; border:none; border-radius:12px;
-    padding:12px; font-weight:700; font-size:14.5px; cursor:pointer;
+    flex:1; background:var(--gradient-brand); color:#fff; border:none; border-radius:14px;
+    padding:12px; font-weight:800; font-size:14.5px; cursor:pointer;
+    box-shadow:0 8px 18px -10px rgba(255,62,108,.55);
   }
-  .btn-primary:hover{ background:var(--accent-strong); }
+  .btn-primary:hover{ filter:brightness(1.05); }
   .btn-ghost{
     background:transparent; border:1px solid var(--line); color:var(--text-muted);
     border-radius:12px; padding:12px 16px; font-weight:700; font-size:14.5px; cursor:pointer;
@@ -314,18 +343,20 @@
 
   .hint{ font-size:11.5px; color:var(--text-muted); margin-top:4px; }
 
-  @media (prefers-reduced-motion: reduce){ *{ transition:none !important; } }
+  @media (prefers-reduced-motion: reduce){ *{ transition:none !important; animation:none !important; } }
 </style>
 
 <div class="app">
   <div class="topbar">
-    <div class="brand">
-      <h1>美容ノート<span class="dot">.</span></h1>
-      <div class="topbar-right">
-        <button class="topbar-icon-btn" id="btnBackup" aria-label="データのバックアップ">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12m0 0l-4-4m4 4l4-4"/><path d="M5 17v2a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-2"/></svg>
-        </button>
-        <button class="streak-badge zero" id="streakBadge"><span class="streak-flame">🔥</span><span id="streakCount" class="num">0</span></button>
+    <div class="topbar-inner">
+      <div class="brand">
+        <h1>美容ノート<span class="dot">✨</span></h1>
+        <div class="topbar-right">
+          <button class="topbar-icon-btn" id="btnBackup" aria-label="データのバックアップ">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12m0 0l-4-4m4 4l4-4"/><path d="M5 17v2a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-2"/></svg>
+          </button>
+          <button class="streak-badge zero" id="streakBadge"><span class="streak-flame">🔥</span><span id="streakCount" class="num">0</span></button>
+        </div>
       </div>
     </div>
   </div>
@@ -770,23 +801,20 @@
     for(var i=6;i>=0;i--){
       var d = new Date(today); d.setDate(d.getDate()-i);
       var iso = isoLocal(d);
-      var wrap = document.createElement("button");
-      wrap.type = "button";
-      wrap.className = "streak-dot-wrap";
-      var dot = document.createElement("div");
-      dot.className = "streak-dot" + (days[iso] ? " on" : "") + (iso === todayIso ? " today" : "");
-      var label = document.createElement("div");
-      label.className = "streak-dow";
-      var dateEl = document.createElement("span");
-      dateEl.className = "streak-dow-date"; dateEl.textContent = (d.getMonth()+1)+"/"+d.getDate();
+      var pill = document.createElement("button");
+      pill.type = "button";
+      pill.className = "day-pill" + (days[iso] ? " on" : "") + (iso === todayIso ? " today" : "");
       var wdEl = document.createElement("span");
-      wdEl.className = "streak-dow-wd"; wdEl.textContent = dow[d.getDay()];
-      label.appendChild(dateEl); label.appendChild(wdEl);
-      wrap.appendChild(dot); wrap.appendChild(label);
-      wrap.addEventListener("click", function(clickedIso){
+      wdEl.className = "day-wd"; wdEl.textContent = dow[d.getDay()];
+      var dateEl = document.createElement("span");
+      dateEl.className = "day-date num"; dateEl.textContent = d.getDate();
+      var mark = document.createElement("span");
+      mark.className = "day-mark";
+      pill.appendChild(wdEl); pill.appendChild(dateEl); pill.appendChild(mark);
+      pill.addEventListener("click", function(clickedIso){
         return function(){ openDayDetail(clickedIso); };
       }(iso));
-      week.appendChild(wrap);
+      week.appendChild(pill);
     }
   }
 
@@ -823,7 +851,7 @@
     var view = document.getElementById("logListView");
     view.innerHTML = "";
     if(logs.length === 0){
-      view.innerHTML = '<div class="empty-state"><div class="disp">まだ記録がありません</div>今日使ったアイテムや肌の調子を記録してみましょう</div>';
+      view.innerHTML = '<div class="empty-state"><div class="disp">🎀 まだ記録がありません</div>今日使ったアイテムや肌の調子を記録してみましょう</div>';
       return;
     }
     var wrap = document.createElement("div");
@@ -838,7 +866,7 @@
     var list = document.getElementById("dayDetailList");
     list.innerHTML = "";
     if(logs.length === 0){
-      list.innerHTML = '<div class="empty-state"><div class="disp">記録がありません</div></div>';
+      list.innerHTML = '<div class="empty-state"><div class="disp">🎀 記録がありません</div></div>';
     } else {
       var wrap = document.createElement("div");
       wrap.className = "log-list";
@@ -1024,7 +1052,7 @@
     var view = document.getElementById("itemListView");
     view.innerHTML = "";
     if(items.length === 0){
-      view.innerHTML = '<div class="empty-state"><div class="disp">アイテムがありません</div>持っているコスメを登録してみましょう</div>';
+      view.innerHTML = '<div class="empty-state"><div class="disp">💄 アイテムがありません</div>持っているコスメを登録してみましょう</div>';
       return;
     }
     var grid = document.createElement("div");
@@ -1266,7 +1294,7 @@
     var view = document.getElementById("lookListView");
     view.innerHTML = "";
     if(looks.length === 0){
-      view.innerHTML = '<div class="empty-state"><div class="disp">写真がありません</div>お気に入りのヘア・メイクを記録しましょう</div>';
+      view.innerHTML = '<div class="empty-state"><div class="disp">📸 写真がありません</div>お気に入りのヘア・メイクを記録しましょう</div>';
       return;
     }
     var grid = document.createElement("div");
