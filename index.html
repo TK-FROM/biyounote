@@ -6,19 +6,19 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zen+Maru+Gothic:wght@400;500;700;900&family=Manrope:wght@400;500;600;700;800&display=swap">
 <style>
   :root{
-    --bg:#EAF6FB; --surface:#FFFFFF; --surface-alt:#F7E9E4;
-    --text:#201319; --text-muted:#8C787C;
-    --accent:#FF3E6C; --accent-strong:#E01E52; --accent-soft:#FFDCE6; --accent-soft-text:#C41752;
+    --bg:#EAF6FB; --surface:#FFFFFF; --surface-alt:#EEF5FA;
+    --text:#26323C; --text-muted:#75858F;
+    --accent:#FF3E6C; --accent-strong:#E01E52; --accent-soft:#FFE0EA; --accent-soft-text:#C41752;
     --accent2:#9B6BFF; --accent2-strong:#7C3FED;
     --gradient-brand:linear-gradient(135deg, var(--accent) 0%, var(--accent2) 100%);
     --streak:#2FA9DB; --streak-soft:#D2EEFA;
-    --line:#F0DFDA;
+    --line:#DEE9F1;
     --good:#4E8F72; --good-soft:#DDEEE3;
     --warn:#B96A2E; --warn-soft:#F5E1CE;
-    --muted-chip:#F1E4DF; --muted-chip-text:#7A6A6D;
+    --muted-chip:#E6EFF5; --muted-chip-text:#66788A;
     --chip-skincare:#1B9C8C; --chip-haircare:#E39A2E; --chip-bodycare:#7C5FE0; --chip-makeup:#FF3E6C;
-    --shadow:0 10px 26px -14px rgba(32,19,25,0.3);
-    --shadow-sm:0 2px 8px -4px rgba(32,19,25,0.18);
+    --shadow:0 10px 26px -14px rgba(35,55,75,0.3);
+    --shadow-sm:0 2px 8px -4px rgba(35,55,75,0.16);
     --shadow-glow:0 10px 24px -8px rgba(255,62,108,.45), 0 4px 14px -6px rgba(155,107,255,.4);
     --radius-card:16px; --radius-pill:999px; --radius-photo:20px;
   }
@@ -33,7 +33,7 @@
       --line:#3B2A4A;
       --good:#7FBF9B; --good-soft:#213329;
       --warn:#E0A05C; --warn-soft:#3E2E1C;
-      --muted-chip:#2C1F24; --muted-chip-text:#C7ADB3;
+      --muted-chip:#2E2342; --muted-chip-text:#C6B4DD;
       --chip-skincare:#4FC7B6; --chip-haircare:#EBB458; --chip-bodycare:#A793F0; --chip-makeup:#FF6D93;
       --shadow:0 14px 30px -16px rgba(0,0,0,0.6);
       --shadow-sm:0 2px 10px -4px rgba(0,0,0,0.5);
@@ -50,7 +50,7 @@
     --line:#3B2A4A;
     --good:#7FBF9B; --good-soft:#213329;
     --warn:#E0A05C; --warn-soft:#3E2E1C;
-    --muted-chip:#2C1F24; --muted-chip-text:#C7ADB3;
+    --muted-chip:#2E2342; --muted-chip-text:#C6B4DD;
     --chip-skincare:#4FC7B6; --chip-haircare:#EBB458; --chip-bodycare:#A793F0; --chip-makeup:#FF6D93;
     --shadow:0 14px 30px -16px rgba(0,0,0,0.6);
     --shadow-sm:0 2px 10px -4px rgba(0,0,0,0.5);
@@ -184,7 +184,7 @@
     border:1px solid var(--line); background:var(--surface); color:var(--text-muted);
     border-radius:var(--radius-pill); padding:6px 13px; font-size:12.5px; font-weight:700; cursor:pointer;
   }
-  .chip-filter button.active{ background:var(--text); color:var(--surface); border-color:var(--text); }
+  .chip-filter button.active{ background:var(--gradient-brand); color:#fff; border-color:transparent; box-shadow:0 4px 10px -5px rgba(255,62,108,.5); }
   .chip-filter-sub{ margin-top:7px; }
   .chip-filter-sub button{ padding:5px 12px; font-size:11.5px; }
   .chip-filter-sub button.active{ background:var(--accent-soft); color:var(--accent-soft-text); border-color:var(--accent-soft); }
