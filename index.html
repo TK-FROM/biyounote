@@ -649,6 +649,8 @@
   <div class="lightbox-info" id="lightboxInfo"></div>
 </div>
 
+<div id="confettiOverlay" style="position:fixed;inset:0;pointer-events:none;z-index:300;overflow:hidden;"></div>
+
 <script>
 (function(){
   "use strict";
@@ -676,6 +678,28 @@
     try{ localStorage.setItem(THEME_KEY, next); }catch(e){}
     applyTheme(next);
   });
+
+  // ---------------- confetti (記録完了のお祝い演出) ----------------
+  function playConfetti(){
+    if(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    var overlay = document.getElementById("confettiOverlay");
+    overlay.innerHTML = "";
+    var colors = ["#FF3E6C","#9B6BFF","#2FA9DB","#FFC53E","#4ECB8F","#FF8AC2"];
+    for(var i=0;i<60;i++){
+      var p = document.createElement("div");
+      var s = 6 + Math.random()*7;
+      p.style.cssText = "position:absolute;left:50%;top:55%;width:"+s+"px;height:"+(s*0.55)+"px;background:"+colors[i%colors.length]+";border-radius:2px;";
+      overlay.appendChild(p);
+      var ang = Math.random()*Math.PI*2;
+      var dist = 90 + Math.random()*240;
+      var dx = Math.cos(ang)*dist, dy = Math.sin(ang)*dist - 130;
+      p.animate([
+        {transform:"translate(0,0) rotate(0deg)", opacity:1},
+        {transform:"translate("+dx+"px,"+(dy+260)+"px) rotate("+(Math.random()*720-360)+"deg)", opacity:0}
+      ], {duration:1100+Math.random()*500, easing:"cubic-bezier(.15,.55,.35,1)", fill:"forwards"});
+    }
+    setTimeout(function(){ overlay.innerHTML = ""; }, 1800);
+  }
 
   var GENRES = ["スキンケア","ヘアケア","ボディケア","メイク"];
   var GENRE_VAR = {"スキンケア":"--chip-skincare","ヘアケア":"--chip-haircare","ボディケア":"--chip-bodycare","メイク":"--chip-makeup"};
@@ -1049,8 +1073,9 @@
     var id = logState.editingId || uid();
     var fields = { id: id, date: date, times: times, mood: mood, items: items, memo: memo, photo: photo || "" };
     var idx = STATE.logs.findIndex(function(l){ return l.id === id; });
-    if(idx === -1){ STATE.logs.push(fields); } else { STATE.logs[idx] = fields; }
-    if(persist()){ closeLogModal(); renderLogList(); }
+    var isNew = idx === -1;
+    if(isNew){ STATE.logs.push(fields); } else { STATE.logs[idx] = fields; }
+    if(persist()){ closeLogModal(); renderLogList(); if(isNew) playConfetti(); }
   });
   document.getElementById("btnLogDelete").addEventListener("click", function(){
     var id = logState.editingId;
