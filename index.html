@@ -112,17 +112,23 @@
   .panel{ display:none; }
   .panel.active{ display:block; }
 
-  .streak-week{ display:flex; gap:6px; margin-bottom:18px; touch-action:pan-y; }
+  .streak-week{
+    display:flex; gap:6px; margin-bottom:18px;
+    overflow-x:auto; -webkit-overflow-scrolling:touch;
+    scrollbar-width:none; -ms-overflow-style:none;
+    scroll-snap-type:x proximity; padding-bottom:2px;
+  }
+  .streak-week::-webkit-scrollbar{ display:none; }
   .week-nav{ display:flex; justify-content:center; margin:-8px 0 14px; }
   .week-nav button{
     border:none; background:var(--muted-chip); color:var(--muted-chip-text);
     border-radius:var(--radius-pill); padding:6px 14px; font-size:12px; font-weight:700; cursor:pointer;
   }
   .day-pill{
-    flex:1; min-width:0; display:flex; flex-direction:column; align-items:center; gap:1px;
+    flex:0 0 46px; display:flex; flex-direction:column; align-items:center; gap:1px;
     padding:9px 0 8px; border-radius:16px; cursor:pointer; font-family:inherit;
     background:var(--surface); border:1.5px solid var(--line);
-    transition:transform .12s ease; touch-action:pan-y;
+    transition:transform .12s ease; scroll-snap-align:end;
   }
   .day-pill:active{ transform:scale(.94); }
   .day-pill .day-wd{ font-size:10px; font-weight:700; color:var(--text-muted); line-height:1.3; }
@@ -377,7 +383,7 @@
   <section class="panel active" id="panel-log">
     <div class="streak-week" id="streakWeek"></div>
     <div class="week-nav" id="weekNav" style="display:none">
-      <button type="button" id="btnWeekToday">今週にもどる →</button>
+      <button type="button" id="btnWeekToday">今日にもどる →</button>
     </div>
     <div class="panel-head">
       <h2>今日の記録</h2>
@@ -819,7 +825,8 @@
     return {v:mood, bg:"var(--muted-chip)", fg:"var(--muted-chip-text)"};
   }
 
-  var weekOffset = 0; // 週表示のオフセット（7日単位で過去にさかのぼる）
+  var STRIP_DAYS = 180; // 過去何日分をスクロール表示するか
+  var stripInitialized = false;
 
   function renderStreak(logs){
     var days = {};
@@ -837,11 +844,12 @@
     document.getElementById("streakCount").textContent = streak;
 
     var week = document.getElementById("streakWeek");
+    var savedScroll = stripInitialized ? week.scrollLeft : null;
     week.innerHTML = "";
     var dow = ["日","月","火","水","木","金","土"];
-    var end = new Date(today); end.setDate(end.getDate() - weekOffset);
-    for(var i=6;i>=0;i--){
-      var d = new Date(end); d.setDate(d.getDate()-i);
+    var frag = document.createDocumentFragment();
+    for(var i=STRIP_DAYS-1;i>=0;i--){
+      var d = new Date(today); d.setDate(d.getDate()-i);
       var iso = isoLocal(d);
       var pill = document.createElement("button");
       pill.type = "button";
@@ -850,44 +858,31 @@
       wdEl.className = "day-wd"; wdEl.textContent = dow[d.getDay()];
       var dateEl = document.createElement("span");
       dateEl.className = "day-date num";
-      dateEl.textContent = (weekOffset > 0 && d.getDate() === 1) || (weekOffset > 0 && i === 6) ? (d.getMonth()+1)+"/"+d.getDate() : d.getDate();
+      dateEl.textContent = d.getDate() === 1 ? (d.getMonth()+1)+"/1" : d.getDate();
       var mark = document.createElement("span");
       mark.className = "day-mark";
       pill.appendChild(wdEl); pill.appendChild(dateEl); pill.appendChild(mark);
       pill.addEventListener("click", function(clickedIso){
         return function(){ openDayDetail(clickedIso); };
       }(iso));
-      week.appendChild(pill);
+      frag.appendChild(pill);
     }
-    var nav = document.getElementById("weekNav");
-    nav.style.display = weekOffset > 0 ? "" : "none";
+    week.appendChild(frag);
+    // 初回は右端（今日）を表示、再描画時はスクロール位置を維持する
+    week.scrollLeft = savedScroll !== null ? savedScroll : week.scrollWidth;
+    stripInitialized = true;
   }
 
-  // 週表示のスワイプ操作：左スワイプで過去へ、右スワイプで今週方向へ
+  // 過去にスクロールしたら「今日にもどる」ボタンを出す
   (function(){
     var week = document.getElementById("streakWeek");
-    var startX = null, startY = null;
-    function onStart(x, y){ startX = x; startY = y; }
-    function onEnd(x, y){
-      if(startX === null) return;
-      var dx = x - startX, dy = y - startY;
-      startX = null; startY = null;
-      if(Math.abs(dx) < 30 || Math.abs(dx) < Math.abs(dy)) return;
-      if(dx < 0){ weekOffset += 7; }
-      else { weekOffset = Math.max(0, weekOffset - 7); }
-      renderStreak(readLogs());
-    }
-    week.addEventListener("touchstart", function(e){
-      var t = e.touches[0]; onStart(t.clientX, t.clientY);
+    var nav = document.getElementById("weekNav");
+    week.addEventListener("scroll", function(){
+      var fromRight = week.scrollWidth - week.clientWidth - week.scrollLeft;
+      nav.style.display = fromRight > 80 ? "" : "none";
     }, {passive:true});
-    week.addEventListener("touchend", function(e){
-      var t = e.changedTouches[0]; onEnd(t.clientX, t.clientY);
-    });
-    week.addEventListener("mousedown", function(e){ onStart(e.clientX, e.clientY); });
-    week.addEventListener("mouseup", function(e){ onEnd(e.clientX, e.clientY); });
     document.getElementById("btnWeekToday").addEventListener("click", function(){
-      weekOffset = 0;
-      renderStreak(readLogs());
+      week.scrollTo({left: week.scrollWidth, behavior: "smooth"});
     });
   })();
 
