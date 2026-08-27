@@ -144,6 +144,36 @@
   .day-pill.today .day-wd{ color:var(--streak); }
 
   .panel-head{ display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:14px; flex-wrap:wrap; }
+  .cal-open-btn{
+    display:flex; align-items:center; gap:5px; border:none; cursor:pointer;
+    background:var(--surface); color:var(--text-muted); box-shadow:var(--shadow-sm);
+    border-radius:var(--radius-pill); padding:7px 13px 7px 10px; font-size:12.5px; font-weight:800;
+  }
+  .cal-open-btn svg{ width:16px; height:16px; }
+
+  /* ---- calendar modal ---- */
+  .cal-head{ display:flex; align-items:center; justify-content:space-between; margin-bottom:12px; }
+  .cal-head h3{ margin:0; font-size:17px; }
+  .cal-nav{
+    border:none; background:var(--surface-alt); color:var(--text); cursor:pointer;
+    width:36px; height:36px; border-radius:50%; font-size:22px; line-height:1;
+    display:flex; align-items:center; justify-content:center;
+  }
+  .cal-dow{ display:grid; grid-template-columns:repeat(7,1fr); text-align:center; font-size:11px; font-weight:800; color:var(--text-muted); margin-bottom:6px; }
+  .cal-dow span:first-child{ color:#E0566E; }
+  .cal-dow span:last-child{ color:var(--streak); }
+  .cal-grid{ display:grid; grid-template-columns:repeat(7,1fr); gap:5px; }
+  .cal-cell{
+    aspect-ratio:1/1; border-radius:12px; border:1.5px solid var(--line); background:var(--surface);
+    display:flex; flex-direction:column; align-items:center; justify-content:center; gap:2px;
+    font-family:inherit; font-size:13.5px; font-weight:700; color:var(--text); cursor:pointer; padding:0;
+  }
+  .cal-cell.empty{ border-color:transparent; background:transparent; cursor:default; }
+  .cal-cell .cal-dot{ width:6px; height:6px; border-radius:50%; background:transparent; }
+  .cal-cell.on{ background:var(--streak-soft); border-color:var(--streak); color:var(--streak); }
+  .cal-cell.on .cal-dot{ background:var(--streak); }
+  .cal-cell.today{ border-color:var(--streak); border-width:2.5px; }
+  .cal-cell.future{ opacity:.35; }
   .panel-head h2{ font-size:20px; font-weight:600; margin:0; }
 
   .bottom-nav{
@@ -387,6 +417,10 @@
     </div>
     <div class="panel-head">
       <h2>今日の記録</h2>
+      <button type="button" class="cal-open-btn" id="btnOpenCalendar">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M3 10h18M8 3v4m8-4v4"/></svg>
+        カレンダー
+      </button>
     </div>
     <div id="logListView"></div>
   </section>
@@ -494,6 +528,25 @@
       <button class="btn-primary" id="btnLogSave">保存する</button>
     </div>
     <button class="btn-ghost btn-danger" id="btnLogDelete" style="display:none;margin-top:10px;width:100%;">この記録を削除</button>
+  </div>
+</div>
+
+<!-- ===== modal: calendar ===== -->
+<div class="modal-overlay" id="modalCalendar">
+  <div class="modal">
+    <div class="cal-head">
+      <button type="button" class="cal-nav" id="btnCalPrev" aria-label="前の月">‹</button>
+      <h3 id="calTitle" class="num">2026年8月</h3>
+      <button type="button" class="cal-nav" id="btnCalNext" aria-label="次の月">›</button>
+    </div>
+    <div class="cal-dow">
+      <span>日</span><span>月</span><span>火</span><span>水</span><span>木</span><span>金</span><span>土</span>
+    </div>
+    <div class="cal-grid" id="calGrid"></div>
+    <div class="modal-actions">
+      <button class="btn-ghost" id="btnCalToday" style="flex:1;">今月にもどる</button>
+      <button class="btn-ghost" id="btnCalClose" style="flex:1;">閉じる</button>
+    </div>
   </div>
 </div>
 
@@ -969,6 +1022,63 @@
   }
   document.getElementById("btnDayDetailClose").addEventListener("click", function(){
     document.getElementById("modalDayDetail").classList.remove("show");
+  });
+
+  // ---------------- calendar modal ----------------
+  var calState = { year: 0, month: 0 }; // month: 0-11
+  function renderCalendar(){
+    var days = {};
+    STATE.logs.forEach(function(l){ days[l.date] = true; });
+    var today = new Date(); today.setHours(0,0,0,0);
+    var todayIso = isoLocal(today);
+    document.getElementById("calTitle").textContent = calState.year+"年"+(calState.month+1)+"月";
+    var grid = document.getElementById("calGrid");
+    grid.innerHTML = "";
+    var first = new Date(calState.year, calState.month, 1);
+    var lastDay = new Date(calState.year, calState.month+1, 0).getDate();
+    for(var b=0;b<first.getDay();b++){
+      var e = document.createElement("div"); e.className = "cal-cell empty"; grid.appendChild(e);
+    }
+    for(var day=1;day<=lastDay;day++){
+      var d = new Date(calState.year, calState.month, day);
+      var iso = isoLocal(d);
+      var cell = document.createElement("button");
+      cell.type = "button";
+      cell.className = "cal-cell" + (days[iso] ? " on" : "") + (iso === todayIso ? " today" : "") + (d > today ? " future" : "");
+      var num = document.createElement("span"); num.className = "num"; num.textContent = day;
+      var dot = document.createElement("span"); dot.className = "cal-dot";
+      cell.appendChild(num); cell.appendChild(dot);
+      cell.addEventListener("click", function(clickedIso){
+        return function(){
+          document.getElementById("modalCalendar").classList.remove("show");
+          openDayDetail(clickedIso);
+        };
+      }(iso));
+      grid.appendChild(cell);
+    }
+  }
+  function openCalendar(){
+    var now = new Date();
+    calState.year = now.getFullYear(); calState.month = now.getMonth();
+    renderCalendar();
+    document.getElementById("modalCalendar").classList.add("show");
+  }
+  document.getElementById("btnOpenCalendar").addEventListener("click", openCalendar);
+  document.getElementById("btnCalPrev").addEventListener("click", function(){
+    calState.month--; if(calState.month < 0){ calState.month = 11; calState.year--; }
+    renderCalendar();
+  });
+  document.getElementById("btnCalNext").addEventListener("click", function(){
+    calState.month++; if(calState.month > 11){ calState.month = 0; calState.year++; }
+    renderCalendar();
+  });
+  document.getElementById("btnCalToday").addEventListener("click", function(){
+    var now = new Date();
+    calState.year = now.getFullYear(); calState.month = now.getMonth();
+    renderCalendar();
+  });
+  document.getElementById("btnCalClose").addEventListener("click", function(){
+    document.getElementById("modalCalendar").classList.remove("show");
   });
 
   function buildMoodPicker(container, selected){
