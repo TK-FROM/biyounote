@@ -304,6 +304,34 @@
   .status-inuse{ background:var(--good-soft); color:var(--good); }
   .status-used{ background:var(--surface-alt); color:var(--text-muted); }
 
+  /* ---- history tab ---- */
+  .hist-lead{ font-size:12.5px; color:var(--text-muted); margin:-4px 0 12px; line-height:1.6; }
+  .hist-list{ display:flex; flex-direction:column; gap:10px; }
+  .hist-card{
+    display:flex; gap:12px; align-items:flex-start; cursor:pointer;
+    background:var(--surface); border:1px solid var(--line); border-radius:var(--radius-card);
+    padding:11px; box-shadow:var(--shadow-sm);
+  }
+  .hist-photo{
+    width:66px; height:66px; border-radius:12px; flex:none; overflow:hidden;
+    background:var(--surface-alt); display:flex; align-items:center; justify-content:center; font-size:26px;
+  }
+  .hist-photo img{ width:100%; height:100%; object-fit:cover; display:block; }
+  .hist-body{ flex:1; min-width:0; }
+  .hist-top{ display:flex; align-items:center; gap:6px; flex-wrap:wrap; margin-bottom:3px; }
+  .hist-date{ font-size:12px; font-weight:800; color:var(--streak); }
+  .hist-name{ font-weight:700; font-size:14px; line-height:1.3; }
+  .hist-brand{ font-size:11.5px; color:var(--text-muted); }
+  .hist-review{
+    font-size:12px; color:var(--text-muted); margin-top:5px; line-height:1.5;
+    display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden;
+  }
+  .repeat-chip{ font-size:10.5px; font-weight:800; padding:2px 9px; border-radius:var(--radius-pill); }
+  .repeat-yes{ background:var(--good-soft); color:var(--good); }
+  .repeat-normal{ background:var(--muted-chip); color:var(--muted-chip-text); }
+  .repeat-no{ background:var(--accent-soft); color:var(--accent-soft-text); }
+  .repeat-unset{ background:var(--surface-alt); color:var(--text-muted); }
+
   /* ---- lookbook tab ---- */
   .look-grid{ column-count:2; column-gap:12px; }
   @media (min-width:560px){ .look-grid{ column-count:3; } }
@@ -444,6 +472,18 @@
     <div id="itemListView"></div>
   </section>
 
+  <!-- ===== コスメ使用履歴 ===== -->
+  <section class="panel" id="panel-history">
+    <div class="panel-head">
+      <h2>コスメ使用履歴</h2>
+    </div>
+    <p class="hist-lead">使い切ったコスメの記録です。「持っているコスメ」で使い切り日を入れると、ここに並びます。</p>
+    <div class="chip-filter" id="histGenreFilter"></div>
+    <div class="chip-filter chip-filter-sub" id="histRepeatFilter"></div>
+    <div style="height:12px"></div>
+    <div id="histListView"></div>
+  </section>
+
   <!-- ===== ルックブック ===== -->
   <section class="panel" id="panel-looks">
     <div class="panel-head">
@@ -482,6 +522,10 @@
     </button>
     <button class="fab" id="fabAdd" aria-label="追加する">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+    </button>
+    <button class="tab-btn" data-tab="history">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+      履歴
     </button>
     <button class="tab-btn" data-tab="looks">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="13" height="13" rx="2.5"/><path d="M8 21h10a2 2 0 0 0 2-2V9"/><circle cx="7.5" cy="7.5" r="1.4" fill="currentColor" stroke="none"/><path d="M4 13.5 7 10l3 3 2.5-2.5L16 14"/></svg>
@@ -608,6 +652,11 @@
         <input type="date" id="fItemUsedUpDate">
         <label class="hint" style="display:flex;align-items:center;gap:5px;margin-top:5px;cursor:pointer;"><input type="checkbox" id="fItemUsedUpDateUnknown" style="width:auto;">不明</label>
       </div>
+    </div>
+    <div class="field">
+      <label>リピート（また買いたい？）</label>
+      <div class="genre-pick" id="fItemRepeat"></div>
+      <div class="hint">使い切ったあとの評価。「コスメ使用履歴」タブで絞り込めます</div>
     </div>
     <div class="field">
       <label>使用感・レビュー</label>
@@ -763,6 +812,7 @@
     "メイク": ["ベース","アイメイク","チーク","リップ"]
   };
   var LOOK_CATS = ["髪型","メイク","コスメ","その他"];
+  var REPEAT_OPTS = ["リピートあり","普通","リピートなし"];
   var TIME_SLOTS = ["朝","昼","夜","メイク"];
   var COLOR_PRESETS = [
     ["ベージュ","#C9AE8C"],["ブラウン","#7B5236"],["レッド","#B23A3A"],["ピンク","#E497B0"],
@@ -886,7 +936,7 @@
   document.getElementById("fabAdd").addEventListener("click", function(){
     var tab = activeTab();
     if(tab === "log") openLogModal(null);
-    else if(tab === "items") openItemModal(null);
+    else if(tab === "items" || tab === "history") openItemModal(null);
     else openLookModal(null);
   });
   document.getElementById("streakBadge").addEventListener("click", function(){
@@ -1289,6 +1339,88 @@
     view.appendChild(grid);
   }
 
+  // ================= HISTORY TAB (使い切ったコスメ) =================
+  var histState = { genreFilter: "すべて", repeatFilter: "すべて" };
+
+  function buildHistFilters(){
+    var g = document.getElementById("histGenreFilter");
+    g.innerHTML = "";
+    ["すべて"].concat(GENRES).forEach(function(genre){
+      var b = document.createElement("button");
+      b.textContent = genre;
+      if(genre === histState.genreFilter) b.classList.add("active");
+      b.addEventListener("click", function(){ histState.genreFilter = genre; buildHistFilters(); renderHistory(); });
+      g.appendChild(b);
+    });
+    var r = document.getElementById("histRepeatFilter");
+    r.innerHTML = "";
+    ["すべて"].concat(REPEAT_OPTS).forEach(function(opt){
+      var b = document.createElement("button");
+      b.textContent = opt;
+      if(opt === histState.repeatFilter) b.classList.add("active");
+      b.addEventListener("click", function(){ histState.repeatFilter = opt; buildHistFilters(); renderHistory(); });
+      r.appendChild(b);
+    });
+  }
+
+  function repeatChipClass(rep){
+    if(rep === "リピートあり") return "repeat-yes";
+    if(rep === "普通") return "repeat-normal";
+    if(rep === "リピートなし") return "repeat-no";
+    return "repeat-unset";
+  }
+
+  function renderHistory(){
+    var items = readItems().filter(function(it){ return !!it.usedUpDate; });
+    if(histState.genreFilter !== "すべて"){
+      items = items.filter(function(it){ return it.genre === histState.genreFilter; });
+    }
+    if(histState.repeatFilter !== "すべて"){
+      items = items.filter(function(it){ return (it.repeat || "") === histState.repeatFilter; });
+    }
+    // 使い切り日が新しい順。「不明」は最後
+    items.sort(function(a,b){
+      var ad = a.usedUpDate === DATE_UNKNOWN ? "" : a.usedUpDate;
+      var bd = b.usedUpDate === DATE_UNKNOWN ? "" : b.usedUpDate;
+      return bd.localeCompare(ad) || b.id.localeCompare(a.id);
+    });
+
+    var view = document.getElementById("histListView");
+    view.innerHTML = "";
+    if(items.length === 0){
+      view.innerHTML = '<div class="empty-state"><div class="disp">🧴 使い切ったコスメはまだありません</div>「持っているコスメ」でアイテムに使い切り日を入れると、ここに表示されます</div>';
+      return;
+    }
+    var list = document.createElement("div");
+    list.className = "hist-list";
+    items.forEach(function(it){
+      var card = document.createElement("div");
+      card.className = "hist-card";
+      card.innerHTML =
+        '<div class="hist-photo">'+(it.photo ? '<img alt="">' : "🧴")+'</div>'+
+        '<div class="hist-body">'+
+          '<div class="hist-top"><span class="hist-date num"></span><span class="repeat-chip"></span></div>'+
+          '<div class="hist-name"></div>'+
+          '<div class="hist-brand"></div>'+
+          '<div class="item-chip-row" style="margin-top:5px;"><span class="item-genre-chip" style="background:var('+GENRE_VAR[it.genre]+')"></span>'+(it.subcategory ? '<span class="item-subcat-chip"></span>' : "")+'</div>'+
+          (it.review ? '<div class="hist-review"></div>' : "")+
+        '</div>';
+      if(it.photo) card.querySelector(".hist-photo img").src = it.photo;
+      card.querySelector(".hist-date").textContent = "使い切り " + (it.usedUpDate === DATE_UNKNOWN ? "日付不明" : fmtDate(it.usedUpDate));
+      var rc = card.querySelector(".repeat-chip");
+      rc.textContent = it.repeat || "未評価";
+      rc.classList.add(repeatChipClass(it.repeat));
+      card.querySelector(".hist-name").textContent = it.name;
+      card.querySelector(".hist-brand").textContent = it.brand;
+      card.querySelector(".item-genre-chip").textContent = it.genre;
+      if(it.subcategory) card.querySelector(".item-subcat-chip").textContent = it.subcategory;
+      if(it.review) card.querySelector(".hist-review").textContent = it.review;
+      card.addEventListener("click", function(){ openItemModal(it); });
+      list.appendChild(card);
+    });
+    view.appendChild(list);
+  }
+
   function buildGenrePicker(container, selected, options, onSelect){
     container.innerHTML = "";
     options.forEach(function(g){
@@ -1361,6 +1493,7 @@
     document.getElementById("fItemPlace").value = it ? it.place : "";
     itemOpenDateCtl = setupUnknownDateField("fItemOpenDate", "fItemOpenDateUnknown", it ? it.openDate : "");
     itemUsedUpDateCtl = setupUnknownDateField("fItemUsedUpDate", "fItemUsedUpDateUnknown", it ? it.usedUpDate : "");
+    buildGenrePicker(document.getElementById("fItemRepeat"), it ? (it.repeat || "") : "", REPEAT_OPTS);
     document.getElementById("fItemReview").value = it ? it.review : "";
     document.getElementById("fItemIngredient").value = it ? it.ingredient : "";
     itemPhotoCtl = setupPhotoDrop("itemPhotoDrop","itemPhotoHint","fItemPhotoInput", 720, 0.65, it ? it.photo : null);
@@ -1387,19 +1520,20 @@
       place: document.getElementById("fItemPlace").value.trim(),
       openDate: itemOpenDateCtl ? itemOpenDateCtl.get() : "",
       usedUpDate: itemUsedUpDateCtl ? itemUsedUpDateCtl.get() : "",
+      repeat: (function(){ var b = document.querySelector("#fItemRepeat .pick-btn.sel"); return b ? b.dataset.value : ""; })(),
       review: document.getElementById("fItemReview").value.trim(),
       ingredient: document.getElementById("fItemIngredient").value.trim(),
       photo: (itemPhotoCtl ? itemPhotoCtl.get() : null) || ""
     };
     var idx = STATE.items.findIndex(function(it){ return it.id === id; });
     if(idx === -1){ STATE.items.push(fields); } else { STATE.items[idx] = fields; }
-    if(persist()){ closeItemModal(); renderItemList(); refreshItemPlaceList(); }
+    if(persist()){ closeItemModal(); renderItemList(); renderHistory(); refreshItemPlaceList(); }
   });
   document.getElementById("btnItemDelete").addEventListener("click", function(){
     var id = itemState.editingId;
     if(!id || !confirm("このアイテムを削除しますか？")) return;
     STATE.items = STATE.items.filter(function(it){ return it.id !== id; });
-    if(persist()){ closeItemModal(); renderItemList(); refreshItemPlaceList(); }
+    if(persist()){ closeItemModal(); renderItemList(); renderHistory(); refreshItemPlaceList(); }
   });
   document.getElementById("itemSearch").addEventListener("input", renderItemList);
   document.getElementById("itemSort").addEventListener("change", renderItemList);
@@ -1663,6 +1797,7 @@
   function renderAll(){
     renderLogList();
     renderItemList();
+    renderHistory();
     renderLookList();
     refreshItemPlaceList();
   }
@@ -1670,6 +1805,7 @@
   function boot(){
     buildGenreFilterChips();
     buildSubcatFilterChips();
+    buildHistFilters();
     buildLookCatFilter();
     buildLookColorFilter();
     buildLookPersonalColorFilter();
