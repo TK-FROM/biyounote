@@ -275,7 +275,9 @@
   .icon-btn:hover{ background:var(--surface-alt); color:var(--text); }
 
   /* ---- item tab ---- */
-  .item-grid{ display:grid; grid-template-columns:repeat(auto-fill,minmax(160px,1fr)); gap:12px; }
+  .item-grid{ display:grid; grid-template-columns:repeat(3,1fr); gap:8px; }
+  @media (min-width:560px){ .item-grid{ grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); gap:12px; } }
+  .repeat-section{ border-top:1px solid var(--line); margin-top:16px; padding-top:14px; }
   .item-card{
     background:var(--surface); border-radius:var(--radius-card); overflow:hidden;
     box-shadow:var(--shadow-sm); cursor:pointer; display:flex; flex-direction:column;
@@ -286,7 +288,8 @@
     color:var(--text-muted); font-size:28px; overflow:hidden;
   }
   .item-photo img{ width:100%; height:100%; object-fit:cover; display:block; }
-  .item-info{ padding:10px 12px 12px; display:flex; flex-direction:column; gap:5px; flex:1; }
+  .item-info{ padding:7px 8px 9px; display:flex; flex-direction:column; gap:3px; flex:1; }
+  @media (min-width:560px){ .item-info{ padding:10px 12px 12px; gap:5px; } }
   .item-chip-row{ display:flex; flex-wrap:wrap; gap:4px; }
   .item-genre-chip{
     font-size:10.5px; font-weight:800; letter-spacing:.03em;
@@ -296,9 +299,10 @@
     font-size:10.5px; font-weight:700;
     background:var(--muted-chip); color:var(--muted-chip-text); padding:2px 9px; border-radius:var(--radius-pill);
   }
-  .item-name{ font-weight:700; font-size:13.5px; line-height:1.3; }
-  .item-brand{ font-size:11.5px; color:var(--text-muted); }
-  .status-row{ margin-top:auto; display:flex; align-items:center; gap:6px; }
+  .item-name{ font-weight:700; font-size:12px; line-height:1.3; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
+  .item-brand{ font-size:10.5px; color:var(--text-muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  @media (min-width:560px){ .item-name{ font-size:13.5px; } .item-brand{ font-size:11.5px; } }
+  .status-row{ margin-top:auto; display:flex; align-items:center; gap:6px; flex-wrap:wrap; }
   .status-chip{ font-size:10.5px; font-weight:700; padding:2px 9px; border-radius:var(--radius-pill); }
   .status-unopened{ background:var(--muted-chip); color:var(--muted-chip-text); }
   .status-inuse{ background:var(--good-soft); color:var(--good); }
@@ -654,17 +658,23 @@
       </div>
     </div>
     <div class="field">
-      <label>リピート（また買いたい？）</label>
-      <div class="genre-pick" id="fItemRepeat"></div>
-      <div class="hint">使い切ったあとの評価。「コスメ使用履歴」タブで絞り込めます</div>
-    </div>
-    <div class="field">
       <label>使用感・レビュー</label>
       <textarea id="fItemReview" placeholder="使ってみた感想"></textarea>
     </div>
     <div class="field">
       <label>成分・肌質メモ</label>
       <textarea id="fItemIngredient" placeholder="配合成分や自分の肌との相性など"></textarea>
+    </div>
+    <div class="repeat-section">
+      <div class="field">
+        <label>リピート（また買いたい？）</label>
+        <div class="genre-pick" id="fItemRepeat"></div>
+        <div class="hint">使い切ったあとの評価。「履歴」タブで絞り込めます</div>
+      </div>
+      <div class="field">
+        <label>リピートの理由</label>
+        <textarea id="fItemRepeatReason" placeholder="例）乾燥が気になった、コスパが良かった、香りが好み"></textarea>
+      </div>
     </div>
     <div class="modal-actions">
       <button class="btn-ghost" id="btnItemCancel">キャンセル</button>
@@ -1403,7 +1413,7 @@
           '<div class="hist-name"></div>'+
           '<div class="hist-brand"></div>'+
           '<div class="item-chip-row" style="margin-top:5px;"><span class="item-genre-chip" style="background:var('+GENRE_VAR[it.genre]+')"></span>'+(it.subcategory ? '<span class="item-subcat-chip"></span>' : "")+'</div>'+
-          (it.review ? '<div class="hist-review"></div>' : "")+
+          ((it.repeatReason || it.review) ? '<div class="hist-review"></div>' : "")+
         '</div>';
       if(it.photo) card.querySelector(".hist-photo img").src = it.photo;
       card.querySelector(".hist-date").textContent = "使い切り " + (it.usedUpDate === DATE_UNKNOWN ? "日付不明" : fmtDate(it.usedUpDate));
@@ -1414,7 +1424,7 @@
       card.querySelector(".hist-brand").textContent = it.brand;
       card.querySelector(".item-genre-chip").textContent = it.genre;
       if(it.subcategory) card.querySelector(".item-subcat-chip").textContent = it.subcategory;
-      if(it.review) card.querySelector(".hist-review").textContent = it.review;
+      if(it.repeatReason || it.review) card.querySelector(".hist-review").textContent = it.repeatReason ? "理由：" + it.repeatReason : it.review;
       card.addEventListener("click", function(){ openItemModal(it); });
       list.appendChild(card);
     });
@@ -1494,6 +1504,7 @@
     itemOpenDateCtl = setupUnknownDateField("fItemOpenDate", "fItemOpenDateUnknown", it ? it.openDate : "");
     itemUsedUpDateCtl = setupUnknownDateField("fItemUsedUpDate", "fItemUsedUpDateUnknown", it ? it.usedUpDate : "");
     buildGenrePicker(document.getElementById("fItemRepeat"), it ? (it.repeat || "") : "", REPEAT_OPTS);
+    document.getElementById("fItemRepeatReason").value = it ? (it.repeatReason || "") : "";
     document.getElementById("fItemReview").value = it ? it.review : "";
     document.getElementById("fItemIngredient").value = it ? it.ingredient : "";
     itemPhotoCtl = setupPhotoDrop("itemPhotoDrop","itemPhotoHint","fItemPhotoInput", 720, 0.65, it ? it.photo : null);
@@ -1521,6 +1532,7 @@
       openDate: itemOpenDateCtl ? itemOpenDateCtl.get() : "",
       usedUpDate: itemUsedUpDateCtl ? itemUsedUpDateCtl.get() : "",
       repeat: (function(){ var b = document.querySelector("#fItemRepeat .pick-btn.sel"); return b ? b.dataset.value : ""; })(),
+      repeatReason: document.getElementById("fItemRepeatReason").value.trim(),
       review: document.getElementById("fItemReview").value.trim(),
       ingredient: document.getElementById("fItemIngredient").value.trim(),
       photo: (itemPhotoCtl ? itemPhotoCtl.get() : null) || ""
