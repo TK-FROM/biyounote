@@ -1567,7 +1567,7 @@
     return { get: function(){ return checkbox.checked ? DATE_UNKNOWN : dateInput.value; } };
   }
 
-  function setupPhotoDrop(dropId, hintId, inputId, maxDim, quality, initialPhoto){
+  function setupPhotoDrop(dropId, hintId, inputId, maxDim, quality, initialPhoto, autoWhiten){
     var drop = document.getElementById(dropId), hint = document.getElementById(hintId), input = document.getElementById(inputId);
     drop.querySelectorAll("img").forEach(function(i){ i.remove(); });
     input.value = "";
@@ -1589,9 +1589,41 @@
       if(!file) return;
       hint.textContent = "処理中…";
       var dataUrl = await resizePhoto(file, maxDim, quality);
+      if(autoWhiten){ dataUrl = await autoWhitenBlackBackground(dataUrl); }
       show(dataUrl);
     };
     return { get: function(){ return data; }, set: show };
+  }
+
+  // 新規取り込み時の自動判定：画像の外周の6割以上が「ほぼ黒」なら
+  // 透過→黒潰れした商品画像とみなし、自動で黒背景を白に修復する。
+  // （暗い場所で撮った普通の写真を誤って白塗りしないための条件付き自動化）
+  function autoWhitenBlackBackground(dataUrl){
+    return new Promise(function(resolve){
+      var img = new Image();
+      img.onerror = function(){ resolve(dataUrl); };
+      img.onload = function(){
+        var w = img.width, h = img.height;
+        var canvas = document.createElement("canvas");
+        canvas.width = w; canvas.height = h;
+        var ctx = canvas.getContext("2d");
+        ctx.drawImage(img, 0, 0);
+        var px = ctx.getImageData(0, 0, w, h).data;
+        var TH = 50, black = 0, total = 0;
+        function chk(x, y){
+          var i = (y*w + x) * 4; total++;
+          if(px[i] < TH && px[i+1] < TH && px[i+2] < TH) black++;
+        }
+        for(var x=0;x<w;x++){ chk(x,0); chk(x,h-1); }
+        for(var y=0;y<h;y++){ chk(0,y); chk(w-1,y); }
+        if(black / total >= 0.6){
+          repairBlackBackground(dataUrl).then(function(fixed){ resolve(fixed || dataUrl); }, function(){ resolve(dataUrl); });
+        } else {
+          resolve(dataUrl);
+        }
+      };
+      img.src = dataUrl;
+    });
   }
 
   // 保存済み写真の「透過→黒」焼き付きを修復する。
@@ -1658,7 +1690,7 @@
     document.getElementById("fItemRepeatReason").value = it ? (it.repeatReason || "") : "";
     document.getElementById("fItemReview").value = it ? it.review : "";
     document.getElementById("fItemIngredient").value = it ? it.ingredient : "";
-    itemPhotoCtl = setupPhotoDrop("itemPhotoDrop","itemPhotoHint","fItemPhotoInput", 720, 0.65, it ? it.photo : null);
+    itemPhotoCtl = setupPhotoDrop("itemPhotoDrop","itemPhotoHint","fItemPhotoInput", 720, 0.65, it ? it.photo : null, true);
     document.getElementById("btnItemDelete").style.display = it ? "block" : "none";
     document.getElementById("modalItem").classList.add("show");
   }
