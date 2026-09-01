@@ -403,7 +403,9 @@
   }
   .field textarea{ resize:vertical; min-height:60px; }
   .field-row{ display:flex; gap:10px; }
-  .field-row > *{ flex:1; }
+  .field-row > *{ flex:1; min-width:0; }
+  .field-row input{ min-width:0; max-width:100%; }
+  .field input[type=date]{ -webkit-appearance:none; appearance:none; }
   .genre-pick, .mood-pick, .color-pick{ display:flex; flex-wrap:wrap; gap:6px; }
   .pick-btn{
     border:1.5px solid var(--line); background:var(--surface); color:var(--text);
@@ -662,7 +664,7 @@
     </div>
     <div class="field-row">
       <div class="field"><label>商品名</label><input type="text" id="fItemName" placeholder="商品名"></div>
-      <div class="field"><label>ブランド</label><input type="text" id="fItemBrand" placeholder="ブランド"></div>
+      <div class="field"><label>ブランド</label><input type="text" id="fItemBrand" list="itemBrandList" placeholder="ブランド"><datalist id="itemBrandList"></datalist></div>
     </div>
     <div class="field-row">
       <div class="field">
@@ -909,6 +911,9 @@
           var canvas = document.createElement("canvas");
           canvas.width = cw; canvas.height = ch;
           var ctx = canvas.getContext("2d");
+          // 背景透過画像（PNG等）はJPEG化すると黒くなるので、先に白で塗りつぶす
+          ctx.fillStyle = "#FFFFFF";
+          ctx.fillRect(0, 0, cw, ch);
           ctx.drawImage(img, 0, 0, cw, ch);
           resolve(canvas.toDataURL("image/jpeg", quality));
         };
@@ -1657,6 +1662,17 @@
       var opt = document.createElement("option");
       opt.value = it.place;
       dl.appendChild(opt);
+    });
+    // ブランドの入力候補も同時に更新する
+    var bl = document.getElementById("itemBrandList");
+    bl.innerHTML = "";
+    var seenBrand = {};
+    readItems().forEach(function(it){
+      if(!it.brand || seenBrand[it.brand]) return;
+      seenBrand[it.brand] = true;
+      var opt = document.createElement("option");
+      opt.value = it.brand;
+      bl.appendChild(opt);
     });
   }
 
