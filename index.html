@@ -351,6 +351,37 @@
   .look-colors{ display:flex; flex-wrap:wrap; gap:4px; margin-top:5px; }
   .color-dot{ width:12px; height:12px; border-radius:50%; border:1px solid rgba(0,0,0,.15); }
 
+  /* ---- log item picker (使用アイテム選択) ---- */
+  .logpick-selrow{ display:flex; flex-wrap:wrap; gap:6px; margin-bottom:10px; min-height:22px; }
+  .logpick-selchip{
+    display:inline-flex; align-items:center; gap:4px; border:none; cursor:pointer; font-family:inherit;
+    background:var(--accent-soft); color:var(--accent-soft-text);
+    border-radius:var(--radius-pill); padding:5px 11px; font-size:12px; font-weight:700;
+  }
+  .logpick-grid{ display:grid; grid-template-columns:repeat(3,1fr); gap:7px; margin-top:10px; }
+  .logpick-card{
+    border:1.5px solid var(--line); background:var(--surface); border-radius:12px;
+    padding:0 0 7px; cursor:pointer; font-family:inherit; text-align:center; overflow:hidden; position:relative;
+  }
+  .logpick-card.used{ opacity:.5; }
+  .logpick-card.sel{ border-color:var(--accent); box-shadow:0 0 0 1.5px var(--accent); opacity:1; }
+  .logpick-photo{
+    position:relative; aspect-ratio:1/1; background:var(--surface-alt);
+    display:flex; align-items:center; justify-content:center; font-size:24px; margin-bottom:5px;
+  }
+  .logpick-photo img{ width:100%; height:100%; object-fit:cover; display:block; }
+  .logpick-check{
+    position:absolute; top:5px; right:5px; width:20px; height:20px; border-radius:50%;
+    background:var(--gradient-brand); color:#fff; font-size:12px; font-weight:900;
+    display:none; align-items:center; justify-content:center;
+  }
+  .logpick-card.sel .logpick-check{ display:flex; }
+  .logpick-name{
+    font-size:11px; font-weight:700; line-height:1.3; padding:0 6px; color:var(--text);
+    display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden;
+  }
+  .logpick-brand{ font-size:10px; color:var(--text-muted); padding:0 6px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+
   /* ---- modal ---- */
   .modal-overlay{
     display:none; position:fixed; inset:0; background:rgba(20,14,20,.5); z-index:100;
@@ -1156,55 +1187,119 @@
     });
   }
 
-  function groupKnownItemLabels(){
-    var byGenre = {}, seen = {};
-    GENRES.forEach(function(g){ byGenre[g] = []; });
-    readItems().forEach(function(it){
-      if(!it.name || seen[it.name]) return;
-      seen[it.name] = true;
-      (byGenre[it.genre] || (byGenre[it.genre] = [])).push(it.name);
-    });
-    var otherNames = [];
-    STATE.logs.forEach(function(l){
-      (l.items||[]).forEach(function(name){
-        if(!name || seen[name]) return;
-        seen[name] = true; otherNames.push(name);
-      });
-    });
-    var groups = GENRES.map(function(g){ return { label: g, names: byGenre[g] || [] }; }).filter(function(gr){ return gr.names.length; });
-    if(otherNames.length) groups.push({ label: "その他", names: otherNames });
-    return groups;
+  var logItemsState = { selected: [], genre: "すべて" };
+
+  function toggleLogItem(name){
+    var idx = logItemsState.selected.indexOf(name);
+    if(idx === -1){ logItemsState.selected.push(name); } else { logItemsState.selected.splice(idx,1); }
+    renderLogItemsPicker(document.getElementById("fLogItemsSearch").value);
   }
 
-  var logItemsState = { selected: [] };
   function renderLogItemsPicker(query){
     var container = document.getElementById("fLogItemsPicker");
     container.innerHTML = "";
     var q = (query || "").trim().toLowerCase();
-    groupKnownItemLabels().forEach(function(g){
-      var names = g.names.filter(function(n){ return !q || n.toLowerCase().indexOf(q) !== -1; });
-      if(!names.length) return;
+
+    // 選択中のアイテム（タップで解除）
+    var selRow = document.createElement("div");
+    selRow.className = "logpick-selrow";
+    if(logItemsState.selected.length){
+      logItemsState.selected.forEach(function(n){
+        var chip = document.createElement("button");
+        chip.type = "button"; chip.className = "logpick-selchip";
+        var t = document.createElement("span"); t.textContent = n;
+        chip.appendChild(t); chip.appendChild(document.createTextNode(" ×"));
+        chip.addEventListener("click", function(){ toggleLogItem(n); });
+        selRow.appendChild(chip);
+      });
+    } else {
+      var none = document.createElement("span");
+      none.className = "hint"; none.textContent = "タップして選択（複数OK）";
+      selRow.appendChild(none);
+    }
+    container.appendChild(selRow);
+
+    // ジャンルで絞り込むタブ
+    var tabs = document.createElement("div");
+    tabs.className = "chip-filter chip-filter-sub";
+    ["すべて"].concat(GENRES).forEach(function(g){
+      var b = document.createElement("button");
+      b.type = "button"; b.textContent = g;
+      if(g === logItemsState.genre) b.classList.add("active");
+      b.addEventListener("click", function(){
+        logItemsState.genre = g;
+        renderLogItemsPicker(document.getElementById("fLogItemsSearch").value);
+      });
+      tabs.appendChild(b);
+    });
+    container.appendChild(tabs);
+
+    // 登録済みアイテムを写真付きカードで表示（使用中→未開封→使い切りの順）
+    var items = readItems().filter(function(it){ return it.name; });
+    if(logItemsState.genre !== "すべて"){
+      items = items.filter(function(it){ return it.genre === logItemsState.genre; });
+    }
+    if(q){
+      items = items.filter(function(it){ return (it.name+" "+(it.brand||"")).toLowerCase().indexOf(q) !== -1; });
+    }
+    function rank(it){ if(it.usedUpDate) return 2; if(it.openDate) return 0; return 1; }
+    items.sort(function(a,b){ return rank(a)-rank(b) || a.name.localeCompare(b.name,"ja"); });
+    var seen = {};
+    items = items.filter(function(it){ if(seen[it.name]) return false; seen[it.name] = true; return true; });
+
+    if(items.length){
+      var grid = document.createElement("div");
+      grid.className = "logpick-grid";
+      items.forEach(function(it){
+        var sel = logItemsState.selected.indexOf(it.name) !== -1;
+        var card = document.createElement("button");
+        card.type = "button";
+        card.className = "logpick-card" + (sel ? " sel" : "") + (it.usedUpDate ? " used" : "");
+        card.innerHTML =
+          '<div class="logpick-photo">'+(it.photo ? '<img alt="">' : "🧴")+'<span class="logpick-check">✓</span></div>'+
+          '<div class="logpick-name"></div>'+
+          '<div class="logpick-brand"></div>';
+        if(it.photo) card.querySelector("img").src = it.photo;
+        card.querySelector(".logpick-name").textContent = it.name;
+        card.querySelector(".logpick-brand").textContent = it.brand || it.subcategory || "";
+        card.addEventListener("click", function(){ toggleLogItem(it.name); });
+        grid.appendChild(card);
+      });
+      container.appendChild(grid);
+    }
+
+    // アイテム未登録で、過去のログに手入力された名前
+    var known = {};
+    readItems().forEach(function(it){ known[it.name] = true; });
+    var extraNames = [];
+    STATE.logs.forEach(function(l){
+      (l.items||[]).forEach(function(n){
+        if(!n || known[n] || extraNames.indexOf(n) !== -1) return;
+        if(q && n.toLowerCase().indexOf(q) === -1) return;
+        extraNames.push(n);
+      });
+    });
+    if(logItemsState.genre === "すべて" && extraNames.length){
       var head = document.createElement("div");
-      head.className = "filter-label"; head.style.margin = "10px 0 5px";
-      head.textContent = g.label;
+      head.className = "filter-label"; head.style.margin = "12px 0 5px";
+      head.textContent = "過去に手入力した名前";
       container.appendChild(head);
       var wrap = document.createElement("div");
       wrap.className = "genre-pick";
-      names.forEach(function(n){
+      extraNames.forEach(function(n){
         var b = document.createElement("button");
         b.type = "button"; b.className = "pick-btn" + (logItemsState.selected.indexOf(n) !== -1 ? " sel" : "");
         b.textContent = n;
-        b.addEventListener("click", function(){
-          var idx = logItemsState.selected.indexOf(n);
-          if(idx === -1){ logItemsState.selected.push(n); } else { logItemsState.selected.splice(idx,1); }
-          b.classList.toggle("sel");
-        });
+        b.addEventListener("click", function(){ toggleLogItem(n); });
         wrap.appendChild(b);
       });
       container.appendChild(wrap);
-    });
-    if(!container.children.length){
-      container.innerHTML = '<div class="hint">該当するアイテムがありません</div>';
+    }
+
+    if(!items.length && !extraNames.length){
+      var hint = document.createElement("div");
+      hint.className = "hint"; hint.textContent = "該当するアイテムがありません";
+      container.appendChild(hint);
     }
   }
   document.getElementById("fLogItemsSearch").addEventListener("input", function(){
@@ -1220,6 +1315,7 @@
     logTimesCtl = buildMultiPicker(document.getElementById("fLogTimes"), log ? (log.times || []) : [], TIME_SLOTS);
     buildMoodPicker(document.getElementById("fLogMood"), log ? log.mood : "");
     logItemsState.selected = log ? log.items.slice() : [];
+    logItemsState.genre = "すべて";
     document.getElementById("fLogItemsSearch").value = "";
     renderLogItemsPicker("");
     document.getElementById("fLogItemsExtra").value = "";
