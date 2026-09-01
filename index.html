@@ -1,4 +1,5 @@
 <meta name="robots" content="noindex, nofollow">
+<meta charset="utf-8">
 <title>美容ノート</title>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="apple-mobile-web-app-title" content="美容ノート">
@@ -653,6 +654,7 @@
         <span id="itemPhotoHint">タップして写真を選択</span>
         <input type="file" accept="image/*" id="fItemPhotoInput">
       </label>
+      <button class="btn-ghost" type="button" id="btnItemPhotoFixBg" style="width:100%;margin-top:8px;font-size:12.5px;padding:9px;">写真の黒背景を白に修復する</button>
     </div>
     <div class="field">
       <label>ジャンル</label>
@@ -1576,17 +1578,64 @@
     } else {
       hint.style.display = "block";
     }
+    function show(dataUrl){
+      data = dataUrl;
+      drop.querySelectorAll("img").forEach(function(i){ i.remove(); });
+      hint.style.display = "none";
+      var img = document.createElement("img"); img.src = dataUrl; drop.appendChild(img);
+    }
     input.onchange = async function(){
       var file = input.files[0];
       if(!file) return;
       hint.textContent = "処理中…";
       var dataUrl = await resizePhoto(file, maxDim, quality);
-      data = dataUrl;
-      drop.querySelectorAll("img").forEach(function(i){ i.remove(); });
-      hint.style.display = "none";
-      var img = document.createElement("img"); img.src = dataUrl; drop.appendChild(img);
+      show(dataUrl);
     };
-    return { get: function(){ return data; } };
+    return { get: function(){ return data; }, set: show };
+  }
+
+  // 保存済み写真の「透過→黒」焼き付きを修復する。
+  // 画像の外周からつながっている「ほぼ黒」の領域だけを白に塗り替える
+  // （商品自体の黒いパーツは外周とつながっていなければ保持される）
+  function repairBlackBackground(dataUrl){
+    return new Promise(function(resolve, reject){
+      var img = new Image();
+      img.onerror = reject;
+      img.onload = function(){
+        var w = img.width, h = img.height;
+        var canvas = document.createElement("canvas");
+        canvas.width = w; canvas.height = h;
+        var ctx = canvas.getContext("2d");
+        ctx.drawImage(img, 0, 0);
+        var id = ctx.getImageData(0, 0, w, h);
+        var px = id.data;
+        var TH = 50; // JPEG劣化を考慮した「ほぼ黒」のしきい値
+        function isBlack(i){ return px[i] < TH && px[i+1] < TH && px[i+2] < TH; }
+        var visited = new Uint8Array(w*h);
+        var stack = [];
+        for(var x=0;x<w;x++){ stack.push(x); stack.push((h-1)*w + x); }
+        for(var y=0;y<h;y++){ stack.push(y*w); stack.push(y*w + (w-1)); }
+        var count = 0;
+        while(stack.length){
+          var p = stack.pop();
+          if(visited[p]) continue;
+          visited[p] = 1;
+          var i = p*4;
+          if(!isBlack(i)) continue;
+          px[i] = 255; px[i+1] = 255; px[i+2] = 255;
+          count++;
+          var xx = p % w, yy = (p - xx) / w;
+          if(xx > 0) stack.push(p-1);
+          if(xx < w-1) stack.push(p+1);
+          if(yy > 0) stack.push(p-w);
+          if(yy < h-1) stack.push(p+w);
+        }
+        if(count === 0){ resolve(null); return; }
+        ctx.putImageData(id, 0, 0);
+        resolve(canvas.toDataURL("image/jpeg", 0.8));
+      };
+      img.src = dataUrl;
+    });
   }
 
   var itemPhotoCtl = null;
@@ -1614,6 +1663,25 @@
     document.getElementById("modalItem").classList.add("show");
   }
   function closeItemModal(){ document.getElementById("modalItem").classList.remove("show"); }
+
+  document.getElementById("btnItemPhotoFixBg").addEventListener("click", async function(){
+    var cur = itemPhotoCtl ? itemPhotoCtl.get() : null;
+    var btn = this;
+    if(!cur){ alert("写真がありません"); return; }
+    btn.textContent = "修復中…";
+    try{
+      var fixed = await repairBlackBackground(cur);
+      if(fixed){
+        itemPhotoCtl.set(fixed);
+        btn.textContent = "白背景にしました（「保存する」で確定）";
+      } else {
+        btn.textContent = "黒背景は見つかりませんでした";
+      }
+    }catch(e){
+      btn.textContent = "修復に失敗しました";
+    }
+    setTimeout(function(){ btn.textContent = "写真の黒背景を白に修復する"; }, 3000);
+  });
 
   document.getElementById("btnItemCancel").addEventListener("click", closeItemModal);
   document.getElementById("btnItemSave").addEventListener("click", async function(){
