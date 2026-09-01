@@ -359,29 +359,30 @@
     background:var(--accent-soft); color:var(--accent-soft-text);
     border-radius:var(--radius-pill); padding:5px 11px; font-size:12px; font-weight:700;
   }
-  .logpick-grid{ display:grid; grid-template-columns:repeat(3,1fr); gap:7px; margin-top:10px; }
+  .logpick-grid{ display:grid; grid-template-columns:repeat(4,1fr); gap:5px; margin-top:10px; }
+  @media (min-width:480px){ .logpick-grid{ grid-template-columns:repeat(5,1fr); } }
   .logpick-card{
-    border:1.5px solid var(--line); background:var(--surface); border-radius:12px;
-    padding:0 0 7px; cursor:pointer; font-family:inherit; text-align:center; overflow:hidden; position:relative;
+    border:1.5px solid var(--line); background:var(--surface); border-radius:10px;
+    padding:0 0 5px; cursor:pointer; font-family:inherit; text-align:center; overflow:hidden; position:relative;
   }
   .logpick-card.used{ opacity:.5; }
   .logpick-card.sel{ border-color:var(--accent); box-shadow:0 0 0 1.5px var(--accent); opacity:1; }
   .logpick-photo{
     position:relative; aspect-ratio:1/1; background:var(--surface-alt);
-    display:flex; align-items:center; justify-content:center; font-size:24px; margin-bottom:5px;
+    display:flex; align-items:center; justify-content:center; font-size:18px; margin-bottom:3px;
   }
   .logpick-photo img{ width:100%; height:100%; object-fit:cover; display:block; }
   .logpick-check{
-    position:absolute; top:5px; right:5px; width:20px; height:20px; border-radius:50%;
-    background:var(--gradient-brand); color:#fff; font-size:12px; font-weight:900;
+    position:absolute; top:3px; right:3px; width:16px; height:16px; border-radius:50%;
+    background:var(--gradient-brand); color:#fff; font-size:10px; font-weight:900;
     display:none; align-items:center; justify-content:center;
   }
   .logpick-card.sel .logpick-check{ display:flex; }
   .logpick-name{
-    font-size:11px; font-weight:700; line-height:1.3; padding:0 6px; color:var(--text);
+    font-size:9.5px; font-weight:700; line-height:1.25; padding:0 4px; color:var(--text);
     display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden;
   }
-  .logpick-brand{ font-size:10px; color:var(--text-muted); padding:0 6px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .logpick-brand{ font-size:8.5px; color:var(--text-muted); padding:0 4px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 
   /* ---- modal ---- */
   .modal-overlay{
