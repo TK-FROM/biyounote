@@ -9,7 +9,7 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zen+Maru+Gothic:wght@400;500;700;900&family=Manrope:wght@400;500;600;700;800&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zen+Maru+Gothic:wght@400;500;700;900&family=Manrope:wght@400;500;600;700;800&family=Shippori+Mincho:wght@500;600&family=Montserrat:wght@400;500&display=swap">
 <style>
   :root{
     --bg:#EAF6FB; --surface:#FFFFFF; --surface-alt:#EEF5FA;
@@ -459,28 +459,57 @@
 
   .hint{ font-size:11.5px; color:var(--text-muted); margin-top:4px; }
 
-  /* ---- login (クラウド同期) ---- */
+  /* ---- login (クラウド同期・磁器ホワイト) ----
+     入口の画面だけは、あえてテーマ変数を使わず磁器ホワイトの固定配色で
+     高級コスメブランド調に統一している（ダークモードでもこの見た目のまま） */
   #loginOverlay{
-    position:fixed; inset:0; z-index:400; background:var(--bg);
-    display:flex; align-items:center; justify-content:center; padding:24px;
+    position:fixed; inset:0; z-index:400; background:#FBF9F7;
+    display:flex; align-items:center; justify-content:center; padding:28px;
+    overflow:hidden;
+  }
+  #loginOverlay::after{
+    content:""; position:absolute; top:-140px; right:-120px; width:380px; height:380px; border-radius:50%;
+    background:radial-gradient(circle at 40% 40%, rgba(222,168,182,.18), transparent 68%);
   }
   .login-card{
-    width:100%; max-width:360px; background:var(--surface); border-radius:20px;
-    padding:28px 22px; box-shadow:var(--shadow); text-align:center;
+    position:relative; z-index:5; width:100%; max-width:320px;
+    animation:loginFadeUp .5s ease both;
+  }
+  @keyframes loginFadeUp{ from{ opacity:0; transform:translateY(10px); } to{ opacity:1; transform:none; } }
+  .login-eyebrow{
+    display:block; font-family:'Montserrat',sans-serif; font-size:10px;
+    letter-spacing:.42em; text-transform:uppercase; text-align:center;
+    color:#B98A96; margin-bottom:14px;
   }
   .login-card h2{
-    font-size:23px; font-weight:900; margin:0 0 6px;
-    background:var(--gradient-brand);
-    -webkit-background-clip:text; background-clip:text;
-    color:transparent; -webkit-text-fill-color:transparent;
+    font-family:'Shippori Mincho',serif; font-weight:600; font-size:30px;
+    color:#3A3134; letter-spacing:.08em; text-align:center; margin:0 0 20px;
   }
-  .login-note{ font-size:12.5px; color:var(--text-muted); margin:0 0 16px; line-height:1.6; }
+  .login-rule{ width:28px; height:1px; background:#D9C3C9; margin:0 auto 40px; }
+  .login-field{ margin-bottom:26px; }
+  .login-field label{
+    display:block; font-size:11px; letter-spacing:.12em; color:#A5959B; margin-bottom:7px;
+    font-family:'Zen Kaku Gothic New','Zen Maru Gothic',sans-serif;
+  }
   .login-card input{
-    width:100%; border:1px solid var(--line); background:var(--surface-alt); color:var(--text);
-    border-radius:10px; padding:11px 12px; margin-bottom:10px; font-size:15px;
+    width:100%; border:none; border-bottom:1px solid #E2D7DA; background:transparent;
+    font-family:inherit; font-size:16px; color:#3A3134; padding:7px 2px 11px; border-radius:0;
+    transition:border-color .25s ease;
   }
-  .login-card .btn-primary{ width:100%; }
-  .login-error{ color:#B93A3A; font-size:12.5px; margin:10px 0 0; min-height:1em; }
+  .login-card input:focus{ outline:none; border-bottom-color:#C4506E; }
+  #btnLogin{
+    width:100%; border:none; font-family:inherit; font-size:14px; font-weight:700;
+    letter-spacing:.16em; color:#fff; padding:15px; cursor:pointer; border-radius:10px;
+    background:#C4506E; margin-top:14px;
+    box-shadow:0 14px 28px -16px rgba(196,80,110,.55);
+    transition:opacity .2s ease;
+  }
+  #btnLogin:active{ opacity:.85; }
+  .login-foot{
+    font-family:'Montserrat',sans-serif; font-size:9px; letter-spacing:.3em;
+    color:#C9BBC0; text-align:center; margin:34px 0 0;
+  }
+  .login-error{ color:#B93A3A; font-size:12.5px; margin:14px 0 0; min-height:1em; text-align:center; }
 
   @media (prefers-reduced-motion: reduce){ *{ transition:none !important; animation:none !important; } }
 </style>
@@ -831,12 +860,20 @@
 <!-- ===== ログイン画面（クラウド同期用） ===== -->
 <div id="loginOverlay" style="display:none;">
   <div class="login-card">
+    <span class="login-eyebrow">Beauty Note</span>
     <h2>美容ノート</h2>
-    <p class="login-note">クラウド同期のためログインしてください（この端末では初回のみ）</p>
-    <input type="email" id="loginEmail" placeholder="メールアドレス" autocomplete="username">
-    <input type="password" id="loginPassword" placeholder="パスワード" autocomplete="current-password">
-    <button class="btn-primary" id="btnLogin" type="button">ログイン</button>
+    <div class="login-rule"></div>
+    <div class="login-field">
+      <label>メールアドレス</label>
+      <input type="email" id="loginEmail" autocomplete="username">
+    </div>
+    <div class="login-field">
+      <label>パスワード</label>
+      <input type="password" id="loginPassword" autocomplete="current-password">
+    </div>
+    <button id="btnLogin" type="button">ログイン</button>
     <p class="login-error" id="loginError"></p>
+    <p class="login-foot">Record Your Glow</p>
   </div>
 </div>
 
