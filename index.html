@@ -425,6 +425,30 @@
   }
   .photo-drop img{ max-width:100%; max-height:180px; border-radius:10px; display:block; margin:0 auto; }
   .photo-drop input{ position:absolute; inset:0; opacity:0; cursor:pointer; }
+  /* ---- 写真トリミング ---- */
+  .crop-stage-wrap{ background:#151018; border-radius:12px; padding:8px; overflow:hidden; }
+  .crop-stage{
+    position:relative; margin:0 auto; touch-action:none;
+    user-select:none; -webkit-user-select:none;
+  }
+  .crop-stage img{ display:block; width:100%; height:100%; pointer-events:none; -webkit-user-drag:none; }
+  .crop-box{
+    position:absolute; box-shadow:0 0 0 9999px rgba(0,0,0,.55);
+    border:2px solid #fff; box-sizing:border-box; cursor:move; touch-action:none;
+  }
+  .crop-grid{ position:absolute; inset:0; pointer-events:none; }
+  .crop-grid::before, .crop-grid::after{ content:""; position:absolute; background:rgba(255,255,255,.4); }
+  .crop-grid::before{ left:33.3%; right:33.3%; top:0; bottom:0; border-left:1px solid rgba(255,255,255,.4); border-right:1px solid rgba(255,255,255,.4); background:none; }
+  .crop-grid::after{ top:33.3%; bottom:33.3%; left:0; right:0; border-top:1px solid rgba(255,255,255,.4); border-bottom:1px solid rgba(255,255,255,.4); background:none; }
+  .crop-handle{
+    position:absolute; width:26px; height:26px; border-radius:50%;
+    background:#fff; border:3px solid var(--accent); box-sizing:border-box; touch-action:none;
+  }
+  .crop-handle[data-h="nw"]{ left:-13px; top:-13px; cursor:nwse-resize; }
+  .crop-handle[data-h="ne"]{ right:-13px; top:-13px; cursor:nesw-resize; }
+  .crop-handle[data-h="sw"]{ left:-13px; bottom:-13px; cursor:nesw-resize; }
+  .crop-handle[data-h="se"]{ right:-13px; bottom:-13px; cursor:nwse-resize; }
+  .crop-ratios{ display:flex; flex-wrap:wrap; gap:6px; margin-top:12px; }
   .modal-actions{ display:flex; gap:10px; margin-top:18px; }
   .btn-primary{
     flex:1; background:var(--gradient-brand); color:#fff; border:none; border-radius:14px;
@@ -821,6 +845,30 @@
       <button class="btn-primary" id="btnLookSave">保存する</button>
     </div>
     <button class="btn-ghost btn-danger" id="btnLookDelete" style="display:none;margin-top:10px;width:100%;">この写真を削除</button>
+  </div>
+</div>
+
+<!-- ===== modal: crop ===== -->
+<div class="modal-overlay" id="modalCrop">
+  <div class="modal">
+    <h3>写真を切り抜く</h3>
+    <div class="crop-stage-wrap">
+      <div class="crop-stage" id="cropStage">
+        <img id="cropImg" alt="">
+        <div class="crop-box" id="cropBox">
+          <div class="crop-grid"></div>
+          <div class="crop-handle" data-h="nw"></div>
+          <div class="crop-handle" data-h="ne"></div>
+          <div class="crop-handle" data-h="sw"></div>
+          <div class="crop-handle" data-h="se"></div>
+        </div>
+      </div>
+    </div>
+    <div class="crop-ratios" id="cropRatios"></div>
+    <div class="modal-actions">
+      <button class="btn-ghost" id="btnCropCancel">キャンセル</button>
+      <button class="btn-primary" id="btnCropOk">切り抜いて使う</button>
+    </div>
   </div>
 </div>
 
@@ -1785,10 +1833,187 @@
     return { get: function(){ return checkbox.checked ? DATE_UNKNOWN : dateInput.value; } };
   }
 
-  function setupPhotoDrop(dropId, hintId, inputId, maxDim, quality, initialPhoto, autoWhiten){
+  // ---------------- 写真トリミング ----------------
+  // openCropModal(元画像dataURL, 最終出力の最大辺px, JPEG品質) → Promise
+  //   切り抜き確定: 切り抜き後のdataURLでresolve / キャンセル: nullでresolve
+  var cropCtx = null;
+  var CROP_RATIOS = [
+    {label:"カスタム", v:null},
+    {label:"正方形",  v:1},
+    {label:"4:3",  v:4/3},
+    {label:"3:4",  v:3/4},
+    {label:"16:9", v:16/9},
+    {label:"9:16", v:9/16}
+  ];
+  var CROP_MIN = 30; // 枠の最小辺（表示px）
+
+  (function buildCropRatioButtons(){
+    var wrap = document.getElementById("cropRatios");
+    CROP_RATIOS.forEach(function(r, idx){
+      var b = document.createElement("button");
+      b.type = "button"; b.className = "pick-btn"; b.textContent = r.label;
+      b.dataset.idx = idx;
+      b.addEventListener("click", function(){ selectCropRatio(idx); });
+      wrap.appendChild(b);
+    });
+  })();
+
+  function selectCropRatio(idx){
+    document.querySelectorAll("#cropRatios .pick-btn").forEach(function(b){
+      b.classList.toggle("sel", Number(b.dataset.idx) === idx);
+    });
+    if(!cropCtx) return;
+    var v = CROP_RATIOS[idx].v;
+    cropCtx.aspect = v;
+    if(v !== null){
+      // 枠の中心を保ったまま、その比率で入る最大サイズに合わせ直す
+      var b = cropCtx.box, cx = b.x + b.w/2, cy = b.y + b.h/2;
+      var w = cropCtx.dispW, h = w / v;
+      if(h > cropCtx.dispH){ h = cropCtx.dispH; w = h * v; }
+      b.w = w; b.h = h;
+      b.x = Math.min(Math.max(cx - w/2, 0), cropCtx.dispW - w);
+      b.y = Math.min(Math.max(cy - h/2, 0), cropCtx.dispH - h);
+      updateCropBox();
+    }
+  }
+
+  function updateCropBox(){
+    var el = document.getElementById("cropBox"), b = cropCtx.box;
+    el.style.left = b.x + "px"; el.style.top = b.y + "px";
+    el.style.width = b.w + "px"; el.style.height = b.h + "px";
+  }
+
+  function openCropModal(srcDataUrl, maxDim, quality){
+    return new Promise(function(resolve){
+      var img = new Image();
+      img.onerror = function(){ resolve(srcDataUrl); }; // 読めない画像は切り抜かずそのまま
+      img.onload = function(){
+        document.getElementById("modalCrop").classList.add("show");
+        var stage = document.getElementById("cropStage");
+        var wrap = stage.parentElement;
+        // 表示サイズ: モーダル内の幅と画面の高さ55%に収める
+        var maxW = wrap.clientWidth - 16; // padding分
+        var maxH = Math.min(Math.round(window.innerHeight * 0.55), 420);
+        var scale = Math.min(maxW / img.width, maxH / img.height);
+        var dispW = Math.max(1, Math.round(img.width * scale));
+        var dispH = Math.max(1, Math.round(img.height * scale));
+        stage.style.width = dispW + "px";
+        stage.style.height = dispH + "px";
+        document.getElementById("cropImg").src = srcDataUrl;
+        cropCtx = {
+          img: img, dispW: dispW, dispH: dispH,
+          box: { x: 0, y: 0, w: dispW, h: dispH },
+          aspect: null, resolve: resolve, maxDim: maxDim, quality: quality
+        };
+        selectCropRatio(0); // 初期はカスタム＝全体
+        updateCropBox();
+      };
+      img.src = srcDataUrl;
+    });
+  }
+
+  function closeCropModal(result){
+    document.getElementById("modalCrop").classList.remove("show");
+    if(cropCtx){ var r = cropCtx.resolve; cropCtx = null; r(result); }
+  }
+
+  document.getElementById("btnCropCancel").addEventListener("click", function(){ closeCropModal(null); });
+  document.getElementById("btnCropOk").addEventListener("click", function(){
+    if(!cropCtx) return;
+    var c = cropCtx, b = c.box;
+    // 表示座標 → 元画像座標に変換して切り抜き
+    var sc = c.img.width / c.dispW;
+    var sx = b.x * sc, sy = b.y * sc, sw = b.w * sc, sh = b.h * sc;
+    var outScale = Math.min(1, c.maxDim / Math.max(sw, sh));
+    var dw = Math.max(1, Math.round(sw * outScale)), dh = Math.max(1, Math.round(sh * outScale));
+    var canvas = document.createElement("canvas");
+    canvas.width = dw; canvas.height = dh;
+    var ctx = canvas.getContext("2d");
+    ctx.fillStyle = "#FFFFFF";
+    ctx.fillRect(0, 0, dw, dh);
+    ctx.drawImage(c.img, sx, sy, sw, sh, 0, 0, dw, dh);
+    closeCropModal(canvas.toDataURL("image/jpeg", c.quality));
+  });
+
+  // 枠のドラッグ移動と、四隅ハンドルでのリサイズ（スマホのタッチ・PCのマウス両対応）
+  (function setupCropDrag(){
+    var drag = null; // {mode, startX, startY, orig:{...}}
+    var boxEl = document.getElementById("cropBox");
+    var stage = document.getElementById("cropStage");
+
+    function stagePoint(e){
+      var r = stage.getBoundingClientRect();
+      return {
+        x: Math.min(Math.max(e.clientX - r.left, 0), cropCtx.dispW),
+        y: Math.min(Math.max(e.clientY - r.top, 0), cropCtx.dispH)
+      };
+    }
+
+    boxEl.addEventListener("pointerdown", function(e){
+      if(!cropCtx) return;
+      e.preventDefault();
+      var h = e.target.dataset ? e.target.dataset.h : null;
+      drag = {
+        mode: h || "move",
+        startX: e.clientX, startY: e.clientY,
+        orig: { x: cropCtx.box.x, y: cropCtx.box.y, w: cropCtx.box.w, h: cropCtx.box.h }
+      };
+      boxEl.setPointerCapture(e.pointerId);
+    });
+
+    boxEl.addEventListener("pointermove", function(e){
+      if(!drag || !cropCtx) return;
+      e.preventDefault();
+      var b = cropCtx.box, o = drag.orig;
+      if(drag.mode === "move"){
+        var dx = e.clientX - drag.startX, dy = e.clientY - drag.startY;
+        b.x = Math.min(Math.max(o.x + dx, 0), cropCtx.dispW - b.w);
+        b.y = Math.min(Math.max(o.y + dy, 0), cropCtx.dispH - b.h);
+      } else {
+        // 掴んだ角の対角を固定点にしてリサイズ
+        var ax = (drag.mode === "nw" || drag.mode === "sw") ? o.x + o.w : o.x;
+        var ay = (drag.mode === "nw" || drag.mode === "ne") ? o.y + o.h : o.y;
+        var p = stagePoint(e);
+        var dirX = (p.x >= ax) ? 1 : -1, dirY = (p.y >= ay) ? 1 : -1;
+        var w = Math.abs(p.x - ax), h = Math.abs(p.y - ay);
+        var v = cropCtx.aspect;
+        if(v !== null){
+          // 比率固定: ポインタを包む大きさに合わせ、はみ出すなら縮める
+          if(w / v >= h){ h = w / v; } else { w = h * v; }
+          var maxW = (dirX > 0) ? cropCtx.dispW - ax : ax;
+          var maxH = (dirY > 0) ? cropCtx.dispH - ay : ay;
+          w = Math.min(w, maxW, maxH * v);
+          h = w / v;
+          if(h < CROP_MIN){ h = CROP_MIN; w = h * v; }
+          if(w < CROP_MIN){ w = CROP_MIN; h = w / v; }
+        } else {
+          w = Math.max(w, CROP_MIN);
+          h = Math.max(h, CROP_MIN);
+          w = Math.min(w, (dirX > 0) ? cropCtx.dispW - ax : ax);
+          h = Math.min(h, (dirY > 0) ? cropCtx.dispH - ay : ay);
+        }
+        b.w = w; b.h = h;
+        b.x = (dirX > 0) ? ax : ax - w;
+        b.y = (dirY > 0) ? ay : ay - h;
+        // 念のため画像内にクランプ
+        b.x = Math.min(Math.max(b.x, 0), cropCtx.dispW - b.w);
+        b.y = Math.min(Math.max(b.y, 0), cropCtx.dispH - b.h);
+      }
+      updateCropBox();
+    });
+
+    function endDrag(e){
+      if(drag){ drag = null; try{ boxEl.releasePointerCapture(e.pointerId); }catch(err){} }
+    }
+    boxEl.addEventListener("pointerup", endDrag);
+    boxEl.addEventListener("pointercancel", endDrag);
+  })();
+
+  function setupPhotoDrop(dropId, hintId, inputId, maxDim, quality, initialPhoto, autoWhiten, cropFn){
     var drop = document.getElementById(dropId), hint = document.getElementById(hintId), input = document.getElementById(inputId);
     drop.querySelectorAll("img").forEach(function(i){ i.remove(); });
     input.value = "";
+    hint.textContent = "タップして写真を選択";
     var data = initialPhoto || null;
     if(initialPhoto){
       hint.style.display = "none";
@@ -1806,7 +2031,21 @@
       var file = input.files[0];
       if(!file) return;
       hint.textContent = "処理中…";
-      var dataUrl = await resizePhoto(file, maxDim, quality);
+      var dataUrl;
+      if(cropFn){
+        // トリミングする場合は、まず大きめのまま読み込んでから切り抜き画面へ
+        var src = await resizePhoto(file, 1600, 0.92);
+        dataUrl = await cropFn(src, maxDim, quality);
+        if(dataUrl === null){
+          // トリミングをキャンセルした: 選ぶ前の状態に戻す
+          hint.textContent = "タップして写真を選択";
+          hint.style.display = data ? "none" : "block";
+          input.value = "";
+          return;
+        }
+      } else {
+        dataUrl = await resizePhoto(file, maxDim, quality);
+      }
       if(autoWhiten){ dataUrl = await autoWhitenBlackBackground(dataUrl); }
       show(dataUrl);
     };
@@ -2141,7 +2380,7 @@
     lookSeasonCtl = buildMultiPicker(document.getElementById("fLookSeason"), l ? l.seasons : [], SEASONS);
     lookTextureCtl = buildMultiPicker(document.getElementById("fLookTexture"), l ? l.textures : [], TEXTURES);
     document.getElementById("fLookMemo").value = l ? l.memo : "";
-    lookPhotoCtl = setupPhotoDrop("lookPhotoDrop","lookPhotoHint","fLookPhotoInput", 900, 0.7, l ? l.photo : null);
+    lookPhotoCtl = setupPhotoDrop("lookPhotoDrop","lookPhotoHint","fLookPhotoInput", 900, 0.7, l ? l.photo : null, false, openCropModal);
     document.getElementById("btnLookDelete").style.display = l ? "block" : "none";
     document.getElementById("modalLook").classList.add("show");
   }
