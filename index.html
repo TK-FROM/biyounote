@@ -343,18 +343,18 @@
   .repeat-unset{ background:var(--surface-alt); color:var(--text-muted); }
 
   /* ---- lookbook tab ---- */
-  .look-grid{ column-count:2; column-gap:12px; }
-  @media (min-width:560px){ .look-grid{ column-count:3; } }
+  .look-grid{ display:grid; grid-template-columns:repeat(3,1fr); gap:6px; }
+  @media (min-width:560px){ .look-grid{ grid-template-columns:repeat(4,1fr); gap:10px; } }
   .look-card{
-    break-inside:avoid; margin-bottom:12px; background:var(--surface);
-    border-radius:var(--radius-photo); overflow:hidden; box-shadow:var(--shadow-sm); cursor:pointer;
-    border:1px solid var(--line);
+    background:var(--surface); border-radius:12px; overflow:hidden;
+    box-shadow:var(--shadow-sm); cursor:pointer; border:1px solid var(--line);
   }
-  .look-card img{ width:100%; display:block; }
-  .look-meta{ padding:9px 11px 11px; }
-  .look-cat{ font-size:10.5px; font-weight:800; color:var(--accent); letter-spacing:.03em; }
-  .look-colors{ display:flex; flex-wrap:wrap; gap:4px; margin-top:5px; }
+  .look-card img{ width:100%; aspect-ratio:1/1; object-fit:cover; display:block; }
+  .look-meta{ padding:5px 7px 7px; }
+  .look-cat{ font-size:9.5px; font-weight:800; color:var(--accent); letter-spacing:.02em; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .look-colors{ display:flex; flex-wrap:wrap; gap:3px; margin-top:3px; }
   .color-dot{ width:12px; height:12px; border-radius:50%; border:1px solid rgba(0,0,0,.15); }
+  .look-colors .color-dot{ width:9px; height:9px; }
 
   /* ---- log item picker (使用アイテム選択) ---- */
   .logpick-selrow{ display:flex; flex-wrap:wrap; gap:6px; margin-bottom:10px; min-height:22px; }
@@ -470,6 +470,14 @@
   .lightbox img{ max-width:100%; max-height:78vh; border-radius:12px; object-fit:contain; }
   .lightbox-info{ color:#fff; text-align:center; max-width:480px; font-size:13.5px; }
   .lightbox-close{ position:absolute; top:18px; right:18px; background:rgba(255,255,255,.15); color:#fff; border:none; width:36px; height:36px; border-radius:50%; font-size:18px; cursor:pointer; }
+  .lightbox-nav{
+    position:absolute; top:50%; transform:translateY(-50%); z-index:5;
+    background:rgba(255,255,255,.15); color:#fff; border:none;
+    width:40px; height:40px; border-radius:50%; font-size:24px; line-height:1; cursor:pointer;
+    display:flex; align-items:center; justify-content:center; padding:0 0 3px;
+  }
+  .lightbox-nav.prev{ left:12px; }
+  .lightbox-nav.next{ right:12px; }
 
   .backup-note{ font-size:13px; color:var(--text-muted); margin:0 0 16px; line-height:1.6; }
   .backup-text{
@@ -899,6 +907,8 @@
 <!-- ===== lightbox ===== -->
 <div class="lightbox" id="lightbox">
   <button class="lightbox-close" id="lightboxClose">×</button>
+  <button class="lightbox-nav prev" id="lightboxPrev" aria-label="前の写真">‹</button>
+  <button class="lightbox-nav next" id="lightboxNext" aria-label="次の写真">›</button>
   <img id="lightboxImg" src="" alt="">
   <div class="lightbox-info" id="lightboxInfo"></div>
 </div>
@@ -2309,6 +2319,7 @@
       });
     }
     looks.sort(function(a,b){ return b.id.localeCompare(a.id); });
+    lookViewList = looks; // ライトボックスの前後移動用に、いま表示している順序を覚えておく
 
     var view = document.getElementById("lookListView");
     view.innerHTML = "";
@@ -2341,7 +2352,13 @@
     view.appendChild(grid);
   }
 
+  var lookViewList = [];
+  var lightboxIndex = -1;
+
   function openLightbox(l){
+    lightboxIndex = lookViewList.indexOf(l);
+    document.getElementById("lightboxPrev").style.visibility = lightboxIndex > 0 ? "visible" : "hidden";
+    document.getElementById("lightboxNext").style.visibility = (lightboxIndex >= 0 && lightboxIndex < lookViewList.length - 1) ? "visible" : "hidden";
     document.getElementById("lightboxImg").src = l.photo;
     var infoParts = [];
     if(l.categories.length) infoParts.push(l.categories.join(" / "));
@@ -2364,6 +2381,32 @@
   function closeLightbox(){ document.getElementById("lightbox").classList.remove("show"); }
   document.getElementById("lightboxClose").addEventListener("click", closeLightbox);
   document.getElementById("lightbox").addEventListener("click", function(e){ if(e.target.id === "lightbox") closeLightbox(); });
+
+  // 前後の写真へ移動（dir: -1=前, +1=次）
+  function lightboxStep(dir){
+    if(lightboxIndex < 0) return;
+    var ni = lightboxIndex + dir;
+    if(ni < 0 || ni >= lookViewList.length) return;
+    openLightbox(lookViewList[ni]);
+  }
+  document.getElementById("lightboxPrev").addEventListener("click", function(){ lightboxStep(-1); });
+  document.getElementById("lightboxNext").addEventListener("click", function(){ lightboxStep(1); });
+  // 左右スワイプ: 左に払うと次、右に払うと前
+  (function(){
+    var lb = document.getElementById("lightbox");
+    var sx = null, sy = null;
+    lb.addEventListener("touchstart", function(e){
+      var t = e.touches[0]; sx = t.clientX; sy = t.clientY;
+    }, {passive:true});
+    lb.addEventListener("touchend", function(e){
+      if(sx === null) return;
+      var t = e.changedTouches[0];
+      var dx = t.clientX - sx, dy = t.clientY - sy;
+      sx = null; sy = null;
+      if(Math.abs(dx) < 40 || Math.abs(dx) < Math.abs(dy)) return;
+      lightboxStep(dx < 0 ? 1 : -1);
+    });
+  })();
 
   var lookPhotoCtl = null;
   var lookCatCtl = null, lookColorCtl = null, lookPersonalColorCtl = null, lookSkeletonCtl = null, lookSeasonCtl = null, lookTextureCtl = null;
