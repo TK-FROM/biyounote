@@ -2045,6 +2045,8 @@
       if(cropFn){
         // トリミングする場合は、まず大きめのまま読み込んでから切り抜き画面へ
         var src = await resizePhoto(file, 1600, 0.92);
+        // 黒背景の自動修復は切り抜く前にかける（切り抜き後だと外周の黒が減って判定から漏れるため）
+        if(autoWhiten){ src = await autoWhitenBlackBackground(src); }
         dataUrl = await cropFn(src, maxDim, quality);
         if(dataUrl === null){
           // トリミングをキャンセルした: 選ぶ前の状態に戻す
@@ -2055,8 +2057,8 @@
         }
       } else {
         dataUrl = await resizePhoto(file, maxDim, quality);
+        if(autoWhiten){ dataUrl = await autoWhitenBlackBackground(dataUrl); }
       }
-      if(autoWhiten){ dataUrl = await autoWhitenBlackBackground(dataUrl); }
       show(dataUrl);
     };
     return { get: function(){ return data; }, set: show };
@@ -2157,7 +2159,7 @@
     document.getElementById("fItemRepeatReason").value = it ? (it.repeatReason || "") : "";
     document.getElementById("fItemReview").value = it ? it.review : "";
     document.getElementById("fItemIngredient").value = it ? it.ingredient : "";
-    itemPhotoCtl = setupPhotoDrop("itemPhotoDrop","itemPhotoHint","fItemPhotoInput", 720, 0.65, it ? it.photo : null, true);
+    itemPhotoCtl = setupPhotoDrop("itemPhotoDrop","itemPhotoHint","fItemPhotoInput", 720, 0.65, it ? it.photo : null, true, openCropModal);
     document.getElementById("btnItemDelete").style.display = it ? "block" : "none";
     document.getElementById("modalItem").classList.add("show");
   }
