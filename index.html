@@ -431,7 +431,18 @@
     position:relative; margin:0 auto; touch-action:none;
     user-select:none; -webkit-user-select:none;
   }
-  .crop-stage img{ display:block; width:100%; height:100%; pointer-events:none; -webkit-user-drag:none; }
+  /* 画像は拡大するとステージからはみ出すので、この中で切り取る（枠のつまみは切り取らない） */
+  .crop-clip{ position:absolute; inset:0; overflow:hidden; cursor:grab; }
+  .crop-clip img{ position:absolute; left:0; top:0; max-width:none; display:block; pointer-events:none; -webkit-user-drag:none; }
+  .crop-zoom{ display:flex; align-items:center; gap:8px; margin-top:12px; }
+  .crop-zoom input[type=range]{ flex:1; min-width:0; accent-color:var(--accent); }
+  .crop-zoom button{
+    width:34px; height:34px; flex:none; border-radius:50%; border:1px solid var(--line);
+    background:var(--surface-alt); color:var(--text); font-size:18px; font-weight:700; line-height:1; cursor:pointer;
+  }
+  .crop-zoom span{ width:38px; flex:none; text-align:right; font-size:12px; font-weight:700; color:var(--text-muted); }
+  .crop-hint{ font-size:11.5px; color:var(--text-muted); margin:8px 0 0; }
+  .photo-menu button{ width:100%; margin-top:10px; }
   .crop-box{
     position:absolute; box-shadow:0 0 0 9999px rgba(0,0,0,.55);
     border:2px solid #fff; box-sizing:border-box; cursor:move; touch-action:none;
@@ -862,7 +873,7 @@
     <h3>写真を切り抜く</h3>
     <div class="crop-stage-wrap">
       <div class="crop-stage" id="cropStage">
-        <img id="cropImg" alt="">
+        <div class="crop-clip"><img id="cropImg" alt=""></div>
         <div class="crop-box" id="cropBox">
           <div class="crop-grid"></div>
           <div class="crop-handle" data-h="nw"></div>
@@ -872,11 +883,29 @@
         </div>
       </div>
     </div>
+    <div class="crop-zoom">
+      <button type="button" id="btnCropZoomOut" aria-label="縮小">−</button>
+      <input type="range" id="cropZoom" min="1" max="5" step="0.01" value="1" aria-label="拡大率">
+      <button type="button" id="btnCropZoomIn" aria-label="拡大">＋</button>
+      <span id="cropZoomLabel">×1.0</span>
+    </div>
+    <p class="crop-hint">2本指で拡大・移動できます。枠の外をなぞると画像が動きます。</p>
     <div class="crop-ratios" id="cropRatios"></div>
     <div class="modal-actions">
       <button class="btn-ghost" id="btnCropCancel">キャンセル</button>
       <button class="btn-primary" id="btnCropOk">切り抜いて使う</button>
     </div>
+  </div>
+</div>
+
+<!-- ===== modal: 登録済み写真のメニュー ===== -->
+<div class="modal-overlay" id="modalPhotoMenu">
+  <div class="modal photo-menu">
+    <h3>この写真をどうしますか？</h3>
+    <button class="btn-primary" type="button" id="btnPhotoEdit">切り抜き直す</button>
+    <button class="btn-ghost" type="button" id="btnPhotoPick">別の写真を選ぶ</button>
+    <button class="btn-ghost btn-danger" type="button" id="btnPhotoRemove">この写真を消す</button>
+    <button class="btn-ghost" type="button" id="btnPhotoMenuCancel">キャンセル</button>
   </div>
 </div>
 
@@ -1846,7 +1875,10 @@
   // ---------------- 写真トリミング ----------------
   // openCropModal(元画像dataURL, 最終出力の最大辺px, JPEG品質) → Promise
   //   切り抜き確定: 切り抜き後のdataURLでresolve / キャンセル: nullでresolve
+  // 座標の考え方: ステージ（表示枠）は拡大率1のときの画像と同じ大きさ。
+  //   画像は拡大率z・ずらし量(ox,oy)でステージの中に描く。枠(box)はステージ上の座標で持つ。
   var cropCtx = null;
+  var cropLast = null; // 直前に確定した枠・拡大の状態（同じ画像を切り抜き直すときに復元する）
   var CROP_RATIOS = [
     {label:"カスタム", v:null},
     {label:"正方形",  v:1},
@@ -1856,6 +1888,9 @@
     {label:"9:16", v:9/16}
   ];
   var CROP_MIN = 30; // 枠の最小辺（表示px）
+  var CROP_ZOOM_MAX = 5;
+
+  function cropClamp(v, lo, hi){ return Math.min(Math.max(v, lo), hi); }
 
   (function buildCropRatioButtons(){
     var wrap = document.getElementById("cropRatios");
@@ -1868,14 +1903,16 @@
     });
   })();
 
-  function selectCropRatio(idx){
+  // keepBox=true のときはボタンの見た目と比率だけ切り替え、枠は動かさない（状態の復元用）
+  function selectCropRatio(idx, keepBox){
     document.querySelectorAll("#cropRatios .pick-btn").forEach(function(b){
       b.classList.toggle("sel", Number(b.dataset.idx) === idx);
     });
     if(!cropCtx) return;
     var v = CROP_RATIOS[idx].v;
     cropCtx.aspect = v;
-    if(v !== null){
+    cropCtx.aspectIdx = idx;
+    if(v !== null && !keepBox){
       // 枠の中心を保ったまま、その比率で入る最大サイズに合わせ直す
       var b = cropCtx.box, cx = b.x + b.w/2, cy = b.y + b.h/2;
       var w = cropCtx.dispW, h = w / v;
@@ -1891,6 +1928,58 @@
     var el = document.getElementById("cropBox"), b = cropCtx.box;
     el.style.left = b.x + "px"; el.style.top = b.y + "px";
     el.style.width = b.w + "px"; el.style.height = b.h + "px";
+  }
+
+  // 画像の拡大・位置を画面に反映する（枠には触らない）
+  function applyCropView(){
+    var c = cropCtx, im = document.getElementById("cropImg");
+    im.style.width = (c.dispW * c.z) + "px";
+    im.style.height = (c.dispH * c.z) + "px";
+    im.style.left = c.ox + "px";
+    im.style.top = c.oy + "px";
+    document.getElementById("cropZoom").value = c.z;
+    document.getElementById("cropZoomLabel").textContent = "×" + c.z.toFixed(1);
+  }
+
+  // 画像のずらし量を「画像がステージを必ず覆う」範囲に収める
+  function clampCropOffset(z, ox, oy){
+    var c = cropCtx;
+    return {
+      ox: cropClamp(ox, c.dispW - c.dispW * z, 0),
+      oy: cropClamp(oy, c.dispH - c.dispH * z, 0)
+    };
+  }
+
+  // 拡大・移動する。枠は画像に貼り付いたまま一緒に動き、
+  // 画面からはみ出した分は見えている範囲に切り詰める（四隅のつまみを常に触れるようにするため）
+  function setCropView(z, ox, oy){
+    var c = cropCtx, b = c.box;
+    z = cropClamp(z, 1, CROP_ZOOM_MAX);
+    var o = clampCropOffset(z, ox, oy);
+    var k = z / c.z;
+    var x1 = (b.x - c.ox) * k + o.ox, y1 = (b.y - c.oy) * k + o.oy;
+    var x2 = x1 + b.w * k, y2 = y1 + b.h * k;
+    c.z = z; c.ox = o.ox; c.oy = o.oy;
+    x1 = cropClamp(x1, 0, c.dispW - CROP_MIN); y1 = cropClamp(y1, 0, c.dispH - CROP_MIN);
+    x2 = cropClamp(x2, x1 + CROP_MIN, c.dispW); y2 = cropClamp(y2, y1 + CROP_MIN, c.dispH);
+    var w = x2 - x1, h = y2 - y1;
+    if(c.aspect !== null){
+      // 切り詰めで比率が崩れた分は、収まる最大の大きさで中央に置き直す
+      var nw = w, nh = nw / c.aspect;
+      if(nh > h){ nh = h; nw = nh * c.aspect; }
+      x1 += (w - nw) / 2; y1 += (h - nh) / 2; w = nw; h = nh;
+    }
+    b.x = x1; b.y = y1; b.w = w; b.h = h;
+    applyCropView();
+    updateCropBox();
+  }
+
+  // ステージ上の点(px,py)の下にある画像の位置を保ったまま拡大率を変える
+  function zoomCropAt(z, px, py){
+    var c = cropCtx;
+    z = cropClamp(z, 1, CROP_ZOOM_MAX);
+    var k = z / c.z;
+    setCropView(z, px - (px - c.ox) * k, py - (py - c.oy) * k);
   }
 
   function openCropModal(srcDataUrl, maxDim, quality){
@@ -1911,11 +2000,21 @@
         stage.style.height = dispH + "px";
         document.getElementById("cropImg").src = srcDataUrl;
         cropCtx = {
-          img: img, dispW: dispW, dispH: dispH,
+          img: img, src: srcDataUrl, dispW: dispW, dispH: dispH,
           box: { x: 0, y: 0, w: dispW, h: dispH },
-          aspect: null, resolve: resolve, maxDim: maxDim, quality: quality
+          z: 1, ox: 0, oy: 0,
+          aspect: null, aspectIdx: 0, resolve: resolve, maxDim: maxDim, quality: quality
         };
-        selectCropRatio(0); // 初期はカスタム＝全体
+        var p = cropLast;
+        if(p && p.src === srcDataUrl && p.dispW === dispW && p.dispH === dispH){
+          // 同じ画像の切り抜き直し: 前回の枠と拡大をそのまま出す
+          cropCtx.z = p.z; cropCtx.ox = p.ox; cropCtx.oy = p.oy;
+          cropCtx.box = { x: p.box.x, y: p.box.y, w: p.box.w, h: p.box.h };
+          selectCropRatio(p.aspectIdx, true);
+        } else {
+          selectCropRatio(0); // 初期はカスタム＝全体
+        }
+        applyCropView();
         updateCropBox();
       };
       img.src = srcDataUrl;
@@ -1931,9 +2030,13 @@
   document.getElementById("btnCropOk").addEventListener("click", function(){
     if(!cropCtx) return;
     var c = cropCtx, b = c.box;
-    // 表示座標 → 元画像座標に変換して切り抜き
-    var sc = c.img.width / c.dispW;
-    var sx = b.x * sc, sy = b.y * sc, sw = b.w * sc, sh = b.h * sc;
+    cropLast = {
+      src: c.src, dispW: c.dispW, dispH: c.dispH, z: c.z, ox: c.ox, oy: c.oy,
+      box: { x: b.x, y: b.y, w: b.w, h: b.h }, aspectIdx: c.aspectIdx
+    };
+    // ステージ座標 → 元画像座標に変換して切り抜き（拡大とずらしを戻す）
+    var sc = c.img.width / (c.dispW * c.z);
+    var sx = (b.x - c.ox) * sc, sy = (b.y - c.oy) * sc, sw = b.w * sc, sh = b.h * sc;
     var outScale = Math.min(1, c.maxDim / Math.max(sw, sh));
     var dw = Math.max(1, Math.round(sw * outScale)), dh = Math.max(1, Math.round(sh * outScale));
     var canvas = document.createElement("canvas");
@@ -1945,9 +2048,25 @@
     closeCropModal(canvas.toDataURL("image/jpeg", c.quality));
   });
 
-  // 枠のドラッグ移動と、四隅ハンドルでのリサイズ（スマホのタッチ・PCのマウス両対応）
+  // 拡大スライダーと＋−ボタン: 枠の中心を基準に拡大する（狙った場所が逃げないように）
+  (function setupCropZoomControls(){
+    function zoomTo(z){
+      if(!cropCtx) return;
+      var b = cropCtx.box;
+      zoomCropAt(z, b.x + b.w/2, b.y + b.h/2);
+    }
+    document.getElementById("cropZoom").addEventListener("input", function(){ zoomTo(Number(this.value)); });
+    document.getElementById("btnCropZoomOut").addEventListener("click", function(){ if(cropCtx) zoomTo(cropCtx.z - 0.5); });
+    document.getElementById("btnCropZoomIn").addEventListener("click", function(){ if(cropCtx) zoomTo(cropCtx.z + 0.5); });
+  })();
+
+  // 指・マウスの操作（スマホのタッチ・PCのマウス両対応）
+  //   四隅のつまみ: 枠のリサイズ / 枠の中: 枠の移動（端まで行くと画像のほうが送られる）
+  //   枠の外: 画像の移動 / 2本指: 拡大と移動 / ホイール: 拡大
   (function setupCropDrag(){
-    var drag = null; // {mode, startX, startY, orig:{...}}
+    var drag = null;  // {mode, lastX, lastY, orig:{...}}
+    var pinch = null; // {dist, mx, my}
+    var pts = {};     // 触れている指: pointerId → {x, y}（画面座標）
     var boxEl = document.getElementById("cropBox");
     var stage = document.getElementById("cropStage");
 
@@ -1959,39 +2078,77 @@
       };
     }
 
-    boxEl.addEventListener("pointerdown", function(e){
+    function pinchState(){
+      var ids = Object.keys(pts), a = pts[ids[0]], b = pts[ids[1]];
+      var r = stage.getBoundingClientRect();
+      return {
+        dist: Math.max(1, Math.hypot(a.x - b.x, a.y - b.y)),
+        mx: (a.x + b.x) / 2 - r.left, my: (a.y + b.y) / 2 - r.top
+      };
+    }
+
+    stage.addEventListener("pointerdown", function(e){
       if(!cropCtx) return;
       e.preventDefault();
-      var h = e.target.dataset ? e.target.dataset.h : null;
-      drag = {
-        mode: h || "move",
-        startX: e.clientX, startY: e.clientY,
-        orig: { x: cropCtx.box.x, y: cropCtx.box.y, w: cropCtx.box.w, h: cropCtx.box.h }
-      };
-      boxEl.setPointerCapture(e.pointerId);
+      pts[e.pointerId] = { x: e.clientX, y: e.clientY };
+      try{ stage.setPointerCapture(e.pointerId); }catch(err){}
+      var n = Object.keys(pts).length;
+      if(n === 2){
+        drag = null;
+        pinch = pinchState();
+      } else if(n === 1){
+        var h = e.target.dataset ? e.target.dataset.h : null;
+        drag = {
+          mode: h || (boxEl.contains(e.target) ? "move" : "pan"),
+          lastX: e.clientX, lastY: e.clientY,
+          orig: { x: cropCtx.box.x, y: cropCtx.box.y, w: cropCtx.box.w, h: cropCtx.box.h }
+        };
+      }
     });
 
-    boxEl.addEventListener("pointermove", function(e){
-      if(!drag || !cropCtx) return;
+    stage.addEventListener("pointermove", function(e){
+      if(!cropCtx || !pts[e.pointerId]) return;
       e.preventDefault();
-      var b = cropCtx.box, o = drag.orig;
+      pts[e.pointerId] = { x: e.clientX, y: e.clientY };
+      var c = cropCtx, b = c.box;
+      if(pinch){
+        if(Object.keys(pts).length < 2) return;
+        var s = pinchState();
+        var z = cropClamp(c.z * s.dist / pinch.dist, 1, CROP_ZOOM_MAX), k = z / c.z;
+        // 前回の2本指の中点にあった画像の位置を、今の中点へ持ってくる
+        setCropView(z, s.mx - (pinch.mx - c.ox) * k, s.my - (pinch.my - c.oy) * k);
+        pinch = s;
+        return;
+      }
+      if(!drag) return;
+      var dx = e.clientX - drag.lastX, dy = e.clientY - drag.lastY;
+      drag.lastX = e.clientX; drag.lastY = e.clientY;
+      if(drag.mode === "pan"){
+        setCropView(c.z, c.ox + dx, c.oy + dy);
+        return;
+      }
       if(drag.mode === "move"){
-        var dx = e.clientX - drag.startX, dy = e.clientY - drag.startY;
-        b.x = Math.min(Math.max(o.x + dx, 0), cropCtx.dispW - b.w);
-        b.y = Math.min(Math.max(o.y + dy, 0), cropCtx.dispH - b.h);
+        var nx = b.x + dx, ny = b.y + dy;
+        b.x = cropClamp(nx, 0, c.dispW - b.w);
+        b.y = cropClamp(ny, 0, c.dispH - b.h);
+        // 枠が端に当たって動けなかった分は、画像を逆向きに送る（枠で画像の続きを取りに行ける）
+        var o = clampCropOffset(c.z, c.ox - (nx - b.x), c.oy - (ny - b.y));
+        c.ox = o.ox; c.oy = o.oy;
+        applyCropView();
       } else {
         // 掴んだ角の対角を固定点にしてリサイズ
-        var ax = (drag.mode === "nw" || drag.mode === "sw") ? o.x + o.w : o.x;
-        var ay = (drag.mode === "nw" || drag.mode === "ne") ? o.y + o.h : o.y;
+        var og = drag.orig;
+        var ax = (drag.mode === "nw" || drag.mode === "sw") ? og.x + og.w : og.x;
+        var ay = (drag.mode === "nw" || drag.mode === "ne") ? og.y + og.h : og.y;
         var p = stagePoint(e);
         var dirX = (p.x >= ax) ? 1 : -1, dirY = (p.y >= ay) ? 1 : -1;
         var w = Math.abs(p.x - ax), h = Math.abs(p.y - ay);
-        var v = cropCtx.aspect;
+        var v = c.aspect;
         if(v !== null){
           // 比率固定: ポインタを包む大きさに合わせ、はみ出すなら縮める
           if(w / v >= h){ h = w / v; } else { w = h * v; }
-          var maxW = (dirX > 0) ? cropCtx.dispW - ax : ax;
-          var maxH = (dirY > 0) ? cropCtx.dispH - ay : ay;
+          var maxW = (dirX > 0) ? c.dispW - ax : ax;
+          var maxH = (dirY > 0) ? c.dispH - ay : ay;
           w = Math.min(w, maxW, maxH * v);
           h = w / v;
           if(h < CROP_MIN){ h = CROP_MIN; w = h * v; }
@@ -1999,25 +2156,59 @@
         } else {
           w = Math.max(w, CROP_MIN);
           h = Math.max(h, CROP_MIN);
-          w = Math.min(w, (dirX > 0) ? cropCtx.dispW - ax : ax);
-          h = Math.min(h, (dirY > 0) ? cropCtx.dispH - ay : ay);
+          w = Math.min(w, (dirX > 0) ? c.dispW - ax : ax);
+          h = Math.min(h, (dirY > 0) ? c.dispH - ay : ay);
         }
         b.w = w; b.h = h;
         b.x = (dirX > 0) ? ax : ax - w;
         b.y = (dirY > 0) ? ay : ay - h;
         // 念のため画像内にクランプ
-        b.x = Math.min(Math.max(b.x, 0), cropCtx.dispW - b.w);
-        b.y = Math.min(Math.max(b.y, 0), cropCtx.dispH - b.h);
+        b.x = Math.min(Math.max(b.x, 0), c.dispW - b.w);
+        b.y = Math.min(Math.max(b.y, 0), c.dispH - b.h);
       }
       updateCropBox();
     });
 
     function endDrag(e){
-      if(drag){ drag = null; try{ boxEl.releasePointerCapture(e.pointerId); }catch(err){} }
+      delete pts[e.pointerId];
+      try{ stage.releasePointerCapture(e.pointerId); }catch(err){}
+      // 2本指から1本離したときは、残った指で枠が飛ばないよう操作を終える
+      drag = null; pinch = null;
     }
-    boxEl.addEventListener("pointerup", endDrag);
-    boxEl.addEventListener("pointercancel", endDrag);
+    stage.addEventListener("pointerup", endDrag);
+    stage.addEventListener("pointercancel", endDrag);
+
+    stage.addEventListener("wheel", function(e){
+      if(!cropCtx) return;
+      e.preventDefault();
+      var p = stagePoint(e);
+      zoomCropAt(cropCtx.z * (e.deltaY < 0 ? 1.15 : 1 / 1.15), p.x, p.y);
+    }, { passive: false });
   })();
+
+  // ---------------- 登録済み写真をタップしたときのメニュー ----------------
+  // openPhotoMenu({edit, pick, remove}): 選ばれた処理を呼ぶ。
+  //   pick はファイル選択を開くので、ボタンのクリック処理の中で同期的に呼ぶ（iOSは操作の直後でないと開かない）
+  var photoMenuActions = null;
+  function openPhotoMenu(actions){
+    photoMenuActions = actions;
+    document.getElementById("modalPhotoMenu").classList.add("show");
+  }
+  function closePhotoMenu(){
+    document.getElementById("modalPhotoMenu").classList.remove("show");
+    var a = photoMenuActions; photoMenuActions = null;
+    return a;
+  }
+  [["btnPhotoEdit","edit"], ["btnPhotoPick","pick"], ["btnPhotoRemove","remove"]].forEach(function(pair){
+    document.getElementById(pair[0]).addEventListener("click", function(){
+      var a = closePhotoMenu();
+      if(a && a[pair[1]]) a[pair[1]]();
+    });
+  });
+  document.getElementById("btnPhotoMenuCancel").addEventListener("click", closePhotoMenu);
+  document.getElementById("modalPhotoMenu").addEventListener("click", function(e){
+    if(e.target === this) closePhotoMenu();
+  });
 
   function setupPhotoDrop(dropId, hintId, inputId, maxDim, quality, initialPhoto, autoWhiten, cropFn){
     var drop = document.getElementById(dropId), hint = document.getElementById(hintId), input = document.getElementById(inputId);
@@ -2025,6 +2216,8 @@
     input.value = "";
     hint.textContent = "タップして写真を選択";
     var data = initialPhoto || null;
+    var orig = null; // 切り抜き前の元写真（この画面を開いている間だけ持つ。保存はしない）
+    var skipMenu = false;
     if(initialPhoto){
       hint.style.display = "none";
       var img = document.createElement("img"); img.src = initialPhoto; drop.appendChild(img);
@@ -2036,6 +2229,13 @@
       drop.querySelectorAll("img").forEach(function(i){ i.remove(); });
       hint.style.display = "none";
       var img = document.createElement("img"); img.src = dataUrl; drop.appendChild(img);
+    }
+    function clear(){
+      data = null; orig = null;
+      drop.querySelectorAll("img").forEach(function(i){ i.remove(); });
+      input.value = "";
+      hint.textContent = "タップして写真を選択";
+      hint.style.display = "block";
     }
     input.onchange = async function(){
       var file = input.files[0];
@@ -2055,13 +2255,38 @@
           input.value = "";
           return;
         }
+        orig = src;
       } else {
         dataUrl = await resizePhoto(file, maxDim, quality);
         if(autoWhiten){ dataUrl = await autoWhitenBlackBackground(dataUrl); }
       }
       show(dataUrl);
     };
-    return { get: function(){ return data; }, set: show };
+    // 写真が入っているときのタップは、いきなり選び直しにせずメニューを出す（トリミング対応の欄だけ）
+    drop.onclick = function(e){
+      if(!cropFn || !data || skipMenu) return;
+      e.preventDefault();
+      openPhotoMenu({
+        edit: async function(){
+          // 選んだ直後なら元写真から、保存済みの写真ならその写真から切り抜き直す
+          if(!orig) orig = data;
+          var out = await cropFn(orig, maxDim, quality);
+          if(out !== null) show(out);
+        },
+        pick: function(){
+          skipMenu = true;
+          input.value = "";
+          input.click();
+          skipMenu = false;
+        },
+        remove: clear
+      });
+    };
+    return {
+      get: function(){ return data; },
+      // 外から写真を差し替えたとき（黒背景の修復など）は、元写真を持ち越さない
+      set: function(dataUrl){ orig = null; show(dataUrl); }
+    };
   }
 
   // 新規取り込み時の自動判定：画像の外周の6割以上が「ほぼ黒」なら
